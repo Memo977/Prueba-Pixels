@@ -381,7 +381,7 @@ Creamos un componente personalizado para los enlaces de navegación. Archivo: `n
 
 ### Implementando la navegación activa
 
-Reemplazamos los enlaces de navegación HTML estático por componentes dinámicos que detectan la página actual:
+Reemplazamos los enlaces de navegación HTML estático por componentes dinámicos que detectan la página actual en el archivo `layout.blade.php`:
 
 **Antes:**
 ```html
@@ -400,4 +400,143 @@ Reemplazamos los enlaces de navegación HTML estático por componentes dinámico
 
 **Resultado:** La barra de navegación ahora cambia el estilo cuando se pasa el mouse por encima de los enlaces.
 
-![Pagina web en ejecución](./images/episodio05.PNG "Pagina web resaltado de la barra de navegacion al pasar el mouse")
+![Pagina web en ejecución](./images/02.PNG "Pagina web resaltado de la barra de navegacion al pasar el mouse")
+
+## Episodio 06 - View Data and Route Wildcards
+
+### Configuración inicial
+
+Agregamos el helper `Arr` de Laravel en el archivo `web.php` ubicado en el carpeta routes:
+
+```php
+use Illuminate\Support\Arr;
+```
+
+### Eliminando la ruta About
+
+Comentamos o eliminamos la ruta anterior de about:
+
+```php
+// Route::get('/about', function () {
+//     return view('about');
+// });
+```
+
+### Creando la ruta Jobs con datos
+
+Agregamos una nueva ruta que pasa un array de trabajos a la vista:
+
+```php
+Route::get('/jobs', function () {
+    return view('jobs', [
+        'jobs' => [
+            [
+                'id' => 1,
+                'title' => 'Director',
+                'salary' => '$50,000'
+            ],
+            [
+                'id' => 2,
+                'title' => 'Programmer',
+                'salary' => '$10,000'
+            ],
+            [
+                'id' => 3,
+                'title' => 'Teacher',
+                'salary' => '$40,000'
+            ]
+        ]
+    ]);
+});
+```
+
+### Creando ruta con wildcards
+
+Implementamos una ruta dinámica que acepta un parámetro `id` para mostrar trabajos individuales:
+
+```php
+Route::get('/jobs/{id}', function ($id) {
+    $jobs = [
+        [
+            'id' => 1,
+            'title' => 'Director',
+            'salary' => '$50,000'
+        ],
+        [
+            'id' => 2,
+            'title' => 'Programmer',
+            'salary' => '$10,000'
+        ],
+        [
+            'id' => 3,
+            'title' => 'Teacher',
+            'salary' => '$40,000'
+        ]
+    ];
+    
+    $job = Arr::first($jobs, fn($job) => $job['id'] == $id);
+    return view('job', ['job' => $job]);
+});
+```
+
+### Creando la vista Jobs
+
+Renombramos `about.blade.php` a `jobs.blade.php` con el siguiente contenido:
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Job Listings
+    </x-slot:heading>
+    <ul>
+        @foreach ($jobs as $job)
+            <li>
+                <a href="/jobs/{{ $job['id'] }}" class="text-blue-500 hover:underline">
+                    <strong>{{ $job['title'] }}:</strong> Pays {{ $job['salary'] }} per year.
+                </a>
+            </li>
+        @endforeach
+    </ul>
+</x-layout>
+```
+
+### Creando la vista Job individual
+
+Creamos un nuevo archivo `job.blade.php` (singular) para mostrar trabajos individuales:
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Job
+    </x-slot:heading>
+    <h2 class="font-bold text-lg">{{ $job['title'] }}</h2>
+    <p>
+        This job pays {{ $job['salary'] }} per year.
+    </p>
+</x-layout>
+```
+
+### Actualizando la navegación
+
+Modificamos el componente layout para cambiar el enlace de "About" por "Jobs":
+
+```blade
+<!-- Antes -->
+<x-nav-link href="/about" :active="request()->is('about')">About</x-nav-link>
+
+<!-- Después -->
+<x-nav-link href="/jobs" :active="request()->is('jobs')">Jobs</x-nav-link>
+```
+
+### Resultado final
+
+Al completar el episodio 6, la aplicación ahora:
+- Muestra una lista de trabajos con sus salarios
+- Permite hacer clic en cada trabajo para ver los detalles
+- Utiliza wildcards en las rutas para pasar parámetros dinámicos
+- Demuestra cómo pasar datos desde las rutas a las vistas
+
+**Nota:** Los datos están hardcodeados por ahora. En episodios posteriores se hablara de eso a la base de datos.
+
+![En página de jobs se muestra un listado de trabajos](./images/03.PNG "Seccion de Jobs funcionando")
+![Página que muestra detalles de un trabjo especifico](./images/04.PNG "ID de Jobs en la ruta")

@@ -761,3 +761,108 @@ Veremos que se ha creado la tabla `job_listings`.
 - **Colaboración**: Facilita el trabajo en equipo al sincronizar estructuras de BD
 - **Reversibilidad**: Posibilidad de revertir cambios mediante rollbacks
 - **Automatización**: Elimina la necesidad de cambios manuales en la base de datos
+
+## Episodio 09 - Meet Eloquent
+
+### Introducción a Eloquent
+
+Eloquent es el ORM (Object-Relational Mapping) de Laravel que permite interactuar con la base de datos de forma elegante y expresiva.
+
+### Iniciando Tinker
+
+En la terminal ejecutamos:
+
+```bash
+vagrant@webserver:~/sites/30days.isw811.xyz$ php artisan tinker
+```
+
+### Primer intento de crear un registro
+
+Intentamos crear un registro con:
+
+```php
+App\Models\Job::create(['title' => 'Acme Director', 'salary' => '$1,000,000']);
+```
+
+**Resultado:** Se produce un error por temas de seguridad que Laravel proporciona desde el inicio.
+
+![Error al intentar crear un trabajo](./images/07.PNG "Error al intentar crear un trabajo")
+
+### Configurando el modelo Job para Eloquent
+
+Modificamos el archivo `Job.php` en la carpeta `models` para extender de Eloquent Model:
+
+```php
+<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Job extends Model {
+    protected $table = 'job_listings';
+    protected $fillable = ['title', 'salary'];
+}
+```
+
+### Creando registros con Eloquent
+
+Después de la configuración salimos del tinker con el comando `quit` y volvemos a ingresar `php artisan tinker` para que reconozca los cambios y ejecutamos nuevamente:
+
+```php
+App\Models\Job::create(['title' => 'Acme Director', 'salary' => '$1,000,000']);
+```
+
+**Resultado:** Se crea exitosamente el registro.
+
+![Registro creado exitosamente](./images/08.PNG "Trabajo creado exitosamente")
+
+### Agregando más registros
+
+Continuamos creando más trabajos:
+
+```php
+App\Models\Job::create(['title' => 'Director', 'salary' => '50,000']);
+App\Models\Job::create(['title' => 'Programmer', 'salary' => '$60,000']);
+App\Models\Job::create(['title' => 'Teacher', 'salary' => '$50,000']);
+```
+
+### Consultando todos los registros
+
+Para obtener todos los trabajos:
+
+```php
+App\Models\Job::all();
+```
+
+![Se muestran todos los trabajos anteriormente creados](./images/09.PNG "Todos los trabajos")
+
+**Resultado:** Muestra todos los trabajos con id, título, salario y fechas de creación y actualización.
+
+### Buscando por ID
+
+Para buscar un trabajo específico:
+
+```php
+App\Models\Job::find(1);
+```
+
+![Se muestra un trabajo especifico](./images/10.PNG "Busqueda de Job por ID")
+
+### Eliminando registros
+
+Para eliminar un trabajo:
+
+```php
+$job->delete();
+```
+
+**Resultado:** Devuelve `true` si la eliminación fue exitosa.
+
+### Conceptos clave de Eloquent
+
+- **Fillable**: Protege contra asignación masiva especificando campos permitidos
+- **Table**: Especifica el nombre de la tabla cuando no sigue la convención
+- **Timestamps**: Maneja automáticamente `created_at` y `updated_at`
+- **Métodos básicos**: `create()`, `all()`, `find()`, `delete()`
+
+Con esto tenemos una base sólida de Eloquent para interactuar con la base de datos.

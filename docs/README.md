@@ -540,3 +540,100 @@ Al completar el episodio 6, la aplicación ahora:
 
 ![En página de jobs se muestra un listado de trabajos](./images/03.PNG "Seccion de Jobs funcionando")
 ![Página que muestra detalles de un trabjo especifico](./images/04.PNG "ID de Jobs en la ruta")
+
+## Episodio 07 - Autoloading, Namespaces, and Models
+
+### Actualizando el archivo web.php
+
+Modificamos el archivo `web.php` para usar el modelo Job en lugar de datos hardcodeados:
+
+```php
+<?php
+use Illuminate\Support\Facades\Route;
+use App\Models\Job;
+
+Route::get('/', function () {
+    return view('home');
+});
+
+Route::get('/jobs', function () {
+    return view('jobs', [
+        'jobs' => Job::all()
+    ]);
+});
+
+Route::get('/jobs/{id}', function ($id) {
+    $job = Job::find($id);
+    return view('job', ['job' => $job]);
+});
+```
+
+### Buscando el directorio Models
+
+Buscamos la carpeta `Models` dentro del directorio `app`:
+```
+app/
+├── Models/
+│   └── Job.php
+```
+
+### Creando el modelo Job
+
+Creamos el archivo `Job.php` en `app/Models/` con el siguiente contenido:
+
+```php
+<?php
+namespace App\Models;
+
+use Illuminate\Support\Arr;
+
+class Job {
+    public static function all(): array
+    {
+        return [
+            [
+                'id' => 1,
+                'title' => 'Director',
+                'salary' => '$50,000'
+            ],
+            [
+                'id' => 2,
+                'title' => 'Programmer',
+                'salary' => '$10,000'
+            ],
+            [
+                'id' => 3,
+                'title' => 'Teacher',
+                'salary' => '$40,000'
+            ]
+        ];
+    }
+
+    public static function find(int $id): array
+    {
+        $job = Arr::first(static::all(), fn($job) => $job['id'] == $id);
+        
+        if (! $job) {
+            abort(404);
+        }
+        
+        return $job;
+    }
+}
+```
+
+### Conceptos clave del episodio
+
+- **Autoloading**: Laravel automáticamente carga las clases siguiendo el estándar PSR-4
+- **Namespaces**: Uso de `namespace App\Models;` para organizar el código
+- **Modelos**: Separación de la lógica de datos en clases dedicadas
+- **Métodos estáticos**: `all()` y `find()` como métodos de clase
+- **Manejo de errores**: Uso de `abort(404)` cuando no se encuentra un trabajo
+- **Reutilización**: El método `find()` utiliza `static::all()` para reutilizar la lógica
+
+### Beneficios de esta refactorización
+
+1. **Organización**: El código está mejor estructurado y separado por responsabilidades
+2. **Reutilización**: Los datos se centralizan en el modelo
+3. **Mantenibilidad**: Es más fácil modificar la lógica de datos en un solo lugar
+4. **Escalabilidad**: Preparación para la futura integración con base de datos

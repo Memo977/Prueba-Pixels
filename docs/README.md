@@ -637,3 +637,127 @@ class Job {
 2. **Reutilización**: Los datos se centralizan en el modelo
 3. **Mantenibilidad**: Es más fácil modificar la lógica de datos en un solo lugar
 4. **Escalabilidad**: Preparación para la futura integración con base de datos
+
+# Unidad II - Eloquent
+
+## Episodio 08 - Introduction to Migrations
+
+### Introducción a las migraciones
+
+Las migraciones son una característica fundamental de Laravel que permite versionar y gestionar cambios en la estructura de la base de datos. Esto elimina la necesidad de actualizar manualmente las tablas.
+
+### Comando básico de migración
+
+Laravel ya incluye migraciones predeterminadas. Para ejecutarlas usamos:
+
+```bash
+php artisan migrate
+```
+
+### Modificando migraciones existentes
+
+Modificamos el archivo `create_users_table.php` ubicado en `database/migrations/`:
+
+**Eliminamos esta línea:**
+```php
+$table->string('name');
+```
+
+**Agregamos estas dos líneas:**
+```php
+$table->string('first_name');
+$table->string('last_name');
+```
+
+### Creando nuevas migraciones
+
+Para crear una nueva migración para los trabajos, ejecutamos:
+
+```bash
+php artisan make:migration create_job_listings_table
+```
+
+Una vez hecho esto deberia verse asi.
+
+![Migraciones](./images/05.PNG "Migraciones")
+
+### Configuración del entorno
+
+El comando se ejecuta en la máquina virtual webserver:
+
+```bash
+vagrant@webserver:~/sites/30days.isw811.xyz$
+```
+
+**Ubicación de la máquina virtual en la máquina anfitriona:**
+```
+/ISW811/M/VMs/webserver/
+```
+
+### Modificando la migración creada
+
+El archivo creado desde la terminal debe modificarse para incluir la estructura de la tabla:
+
+```php
+<?php
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('job_listings', function (Blueprint $table) {
+            $table->id();
+            $table->string('title');
+            $table->string('salary');
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('job_listings');
+    }
+};
+```
+
+### Ejecutando la migración
+
+Ejecutamos el comando para aplicar la migración:
+
+```bash
+vagrant@webserver:~/sites/30days.isw811.xyz$ php artisan migrate
+```
+
+**Salida esperada:**
+```
+ INFO  Running migrations.
+  2025_07_06_151255_create_job_listings_table .................. 147.05ms DONE
+```
+
+### Verificando en la base de datos
+
+En MariaDB, dentro de la base de datos `30days`, ejecutamos:
+
+```sql
+show tables;
+```
+
+Veremos que se ha creado la tabla `job_listings`.
+
+![Tablas de la base de datos en nuestro servidor de base de datos](./images/06.PNG "Tabla Job ha sido emigrada")
+
+### Conceptos clave
+
+- **Versionado**: Las migraciones permiten rastrear cambios en la base de datos
+- **Colaboración**: Facilita el trabajo en equipo al sincronizar estructuras de BD
+- **Reversibilidad**: Posibilidad de revertir cambios mediante rollbacks
+- **Automatización**: Elimina la necesidad de cambios manuales en la base de datos

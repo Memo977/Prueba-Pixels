@@ -927,6 +927,8 @@ Creamos una nueva factory para el modelo Job:
 php artisan make:factory JobFactory --model=Job
 ```
 
+![JobFactory creado correctamente](./images/11.PNG "JobFactory creado")
+
 ### Configurando JobFactory
 
 **Ubicación:** `database/factories/JobFactory.php`
@@ -951,6 +953,7 @@ public function definition(): array
 ```bash
 php artisan make:model Employer -m
 ```
+![Migración y modelo Employer creado correctamente](./images/12.PNG "Migración y modelo Employer creados")
 
 ### Configurando la migración
 
@@ -978,6 +981,7 @@ Procedemos a borrar el modelo de Employer que está ubicado en la carpeta `app/M
 ```bash
 php artisan make:model Employer -f
 ```
+![EmployerFactory y modelo Employer creado correctamente](./images/13.PNG "EmployerFactory y modelo Employer creados")
 
 ### Configurando EmployerFactory
 
@@ -1074,15 +1078,220 @@ App\Models\Job::count(); // Debería mostrar 10
 4. **Flexibilidad**: Permite personalizar los datos generados según necesidades específicas
 5. **Relaciones automáticas**: Crea automáticamente los modelos relacionados necesarios
 
-## Comandos útiles para verificar
+## Episodio 11 - Eloquent Relationships
+
+## Introducción a las Relaciones de Eloquent
+
+Las relaciones de Eloquent son una característica fundamental de Laravel que permite definir y trabajar con conexiones entre diferentes modelos de base de datos de manera elegante y eficiente.
+
+## Definiendo la relación One-to-Many (Uno a Muchos)
+
+### Configurando el modelo Employer
+
+En el modelo `Employer` ubicado en `app/Models/Employer.php`, añadimos la siguiente función para definir la relación:
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Employer extends Model
+{
+    use HasFactory;
+
+    public function jobs()
+    {
+        return $this->hasMany(Job::class);
+    }
+}
+```
+
+### Entendiendo la relación hasMany
+
+- **hasMany**: Define una relación uno a muchos
+- **Job::class**: Especifica el modelo relacionado
+- **Convención**: Laravel automáticamente busca la columna `employer_id` en la tabla `jobs`
+
+## Trabajando con relaciones en Tinker
+
+### Iniciando Tinker
 
 ```bash
-# Ver las tablas creadas
-php artisan migrate:status
-
-# Acceder a Tinker para interactuar con los modelos
 php artisan tinker
-
-# Hacer rollback si es necesario
-php artisan migrate:rollback
 ```
+
+### Obteniendo un empleador
+
+```php
+$employer = App\Models\Employer::first();
+```
+
+### Accediendo a los trabajos del empleador
+
+```php
+// Obtener todos los trabajos de un empleador
+$employer->jobs;
+```
+![Trabajos de un empleador](./images/14.PNG "Trabajos de un empleador")
+
+Este comando devuelve una **Collection** con todos los trabajos asociados al empleador.
+
+### Diferentes formas de acceder a los datos
+
+#### 1. Acceso como array
+
+```php
+// Obtener el primer trabajo usando índice de array
+$employer->jobs[0];
+```
+
+#### 2. Usando métodos de Collection
+
+```php
+// Obtener el primer trabajo usando el método first()
+$employer->jobs->first();
+
+// Obtener el último trabajo
+$employer->jobs->last();
+
+// Contar los trabajos
+$employer->jobs->count();
+```
+
+### Explorando métodos de Collection
+
+Las Collections de Laravel ofrecen muchos métodos útiles:
+
+```php
+// Verificar si la colección está vacía
+$employer->jobs->isEmpty();
+
+// Verificar si la colección tiene elementos
+$employer->jobs->isNotEmpty();
+
+// Obtener solo los títulos de los trabajos
+$employer->jobs->pluck('title');
+
+// Filtrar trabajos por salario
+$employer->jobs->where('salary', '>', 50000);
+
+// Obtener el primer trabajo que coincida con una condición
+$employer->jobs->firstWhere('title', 'Developer');
+```
+
+## Definiendo la relación inversa (belongsTo)
+
+### Configurando el modelo Job
+
+En el modelo `Job` ubicado en `app/Models/Job.php`, añadimos la relación inversa:
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Job extends Model
+{
+    use HasFactory;
+
+    public function employer()
+    {
+        return $this->belongsTo(Employer::class);
+    }
+}
+```
+
+### Usando la relación belongsTo
+
+```php
+// Obtener un trabajo
+$job = App\Models\Job::first();
+
+// Acceder al empleador de ese trabajo
+$job->employer;
+
+// Acceder al nombre del empleador
+$job->employer->name;
+```
+
+## Ventajas de usar Eloquent Relationships
+
+### 1. Lazy Loading
+```php
+// Solo se ejecuta la consulta cuando accedes a la relación
+$employer = Employer::first();
+$jobs = $employer->jobs; // Consulta SQL ejecutada aquí
+```
+
+### 2. Eager Loading
+```php
+// Cargar empleadores con sus trabajos en una sola consulta
+$employers = Employer::with('jobs')->get();
+```
+
+### 3. Consultas dinámicas
+```php
+// Obtener empleadores que tienen trabajos
+$employersWithJobs = Employer::has('jobs')->get();
+
+// Contar trabajos por empleador
+$employersWithJobCount = Employer::withCount('jobs')->get();
+```
+
+## Ejemplos prácticos de uso
+
+### Creando trabajos para un empleador específico
+
+```php
+// Obtener un empleador
+$employer = Employer::first();
+
+// Crear un nuevo trabajo para este empleador
+$job = new Job();
+$job->title = 'Senior Developer';
+$job->salary = '$80,000 USD';
+$employer->jobs()->save($job);
+```
+
+### Usando create() con relaciones
+
+```php
+// Crear un trabajo directamente asociado a un empleador
+$employer->jobs()->create([
+    'title' => 'Project Manager',
+    'salary' => '$70,000 USD'
+]);
+```
+
+### Consultando datos relacionados
+
+```php
+// Obtener todos los trabajos de un empleador específico
+$googleJobs = Employer::where('name', 'Google')->first()->jobs;
+
+// Obtener empleadores con más de 5 trabajos
+$busyEmployers = Employer::has('jobs', '>', 5)->get();
+```
+
+## Conceptos clave
+
+- **hasMany**: Relación uno a muchos (un empleador tiene muchos trabajos)
+- **belongsTo**: Relación inversa (un trabajo pertenece a un empleador)
+- **Collection**: Estructura de datos que contiene múltiples modelos
+- **Lazy Loading**: Las relaciones se cargan solo cuando se accede a ellas
+- **Eager Loading**: Cargar relaciones de manera anticipada para optimizar consultas
+- **Métodos de Collection**: `first()`, `last()`, `count()`, `pluck()`, `where()`, etc.
+
+## Beneficios de las relaciones Eloquent
+
+1. **Sintaxis limpia**: Acceso intuitivo a datos relacionados
+2. **Optimización automática**: Laravel optimiza las consultas SQL
+3. **Flexibilidad**: Múltiples formas de acceder y manipular datos
+4. **Consistencia**: Mantiene la integridad de los datos relacionados
+5. **Productividad**: Reduce significativamente el código necesario para trabajar con relaciones

@@ -866,3 +866,223 @@ $job->delete();
 - **Métodos básicos**: `create()`, `all()`, `find()`, `delete()`
 
 Con esto tenemos una base sólida de Eloquent para interactuar con la base de datos.
+
+## Episodio 10 - Model Factories
+
+**Parte de la serie:** 30 Days to Learn Laravel  
+**Unidad:** II - Eloquent
+
+## Introducción a Model Factories
+
+Las Model Factories son una característica poderosa de Laravel que permite generar datos falsos de manera consistente y eficiente para testing y desarrollo.
+
+## Actualizando UserFactory
+
+Como anteriormente se modificó la tabla users en la migración reemplazando `name` por `first_name` y `last_name`, se debe actualizar UserFactory para evitar errores al generar datos falsos.
+
+**Ubicación:** `database/factories/UserFactory.php`
+
+```php
+return [
+    'first_name' => $this->faker->firstName(),
+    'last_name' => $this->faker->lastName(),
+    'email' => $this->faker->unique()->safeEmail(),
+    'email_verified_at' => now(),
+    'password' => bcrypt('password'),
+    'remember_token' => Str::random(10),
+];
+```
+
+> **Nota importante:** Si no hace esta modificación, al ejecutar `User::factory()->create()` se obtendrá un error por columna inexistente.
+
+## Usando Factories con Tinker
+
+### Iniciando Tinker
+
+En la terminal ejecutamos:
+
+```bash
+vagrant@webserver:~/sites/30days.isw811.xyz$ php artisan tinker
+```
+
+### Crear un usuario
+
+```php
+App\Models\User::factory()->create();
+```
+
+### Crear múltiples usuarios
+
+```php
+App\Models\User::factory()->count(100)->create();
+```
+
+## Creando una Factory para el modelo Job
+
+### Generando la factory
+
+Creamos una nueva factory para el modelo Job:
+
+```bash
+php artisan make:factory JobFactory --model=Job
+```
+
+### Configurando JobFactory
+
+**Ubicación:** `database/factories/JobFactory.php`
+
+Modificamos la función existente por:
+
+```php
+public function definition(): array
+{
+    return [
+        'title' => $this->faker->jobTitle(),
+        'employer_id' => Employer::factory(),
+        'salary' => '$50,000 USD',
+    ];
+}
+```
+
+## Creando el modelo y migración para Employer
+
+### Generando modelo y migración
+
+```bash
+php artisan make:model Employer -m
+```
+
+### Configurando la migración
+
+**Archivo:** `create_employers_table.php`
+
+Modificamos la función `up` en el método `create` añadiendo `$table->string('name');`:
+
+```php
+public function up(): void
+{
+    Schema::create('employers', function (Blueprint $table) {
+        $table->id();
+        $table->string('name');
+        $table->timestamps();
+    });
+}
+```
+
+### Eliminando modelo duplicado
+
+Procedemos a borrar el modelo de Employer que está ubicado en la carpeta `app/Models` ya que lo crearemos nuevamente con la factory.
+
+### Creando modelo con factory
+
+```bash
+php artisan make:model Employer -f
+```
+
+### Configurando EmployerFactory
+
+Modificamos la función dentro de nuestro archivo de `EmployerFactory` para añadir `'name' => fake()->company()`:
+
+```php
+public function definition(): array
+{
+    return [
+        'name' => fake()->company(),
+    ];
+}
+```
+
+## Configurando la referencia en la migración de Jobs
+
+Para que la relación entre Jobs y Employers funcione correctamente, necesitamos agregar la referencia de clave foránea en la migración de la tabla `job_listings`.
+
+**Archivo:** `create_job_listings_table.php`
+
+Modificamos la función `up` para incluir la referencia:
+
+```php
+public function up(): void
+{
+    Schema::create('job_listings', function (Blueprint $table) {
+        $table->id();
+        $table->foreignIdFor(\App\Models\Employer::class);
+        $table->string(column: 'title');
+        $table->string(column: 'salary');
+        $table->timestamps();
+    });
+}
+```
+
+> **Nota:** `foreignIdFor()` automáticamente crea la columna `employer_id` con la referencia de clave foránea apropiada.
+
+## Ejecutando las migraciones
+
+Una vez configuradas las migraciones y factories, ejecutamos:
+
+```bash
+php artisan migrate:refresh
+```
+Advertencia: Este comando elimina todas las tablas y las vuelve a crear desde cero, perdiendo todos los datos existentes.
+
+## Probando las Factories - Creando datos de prueba
+
+### Usando Tinker para crear registros
+
+Iniciamos Tinker:
+
+```bash
+php artisan tinker
+```
+
+### Creando 10 registros de cada modelo
+
+```php
+// Crear 10 employers
+App\Models\Employer::factory()->count(10)->create();
+
+// Crear 10 users
+App\Models\User::factory()->count(10)->create();
+
+// Crear 10 jobs (automáticamente creará employers si no existen)
+App\Models\Job::factory()->count(10)->create();
+```
+
+### Verificando los datos creados
+
+```php
+// Verificar que se crearon los registros
+App\Models\Employer::count(); // Debería mostrar 10 o más
+App\Models\User::count(); // Debería mostrar 10 o más
+App\Models\Job::count(); // Debería mostrar 10
+```
+
+## Conceptos clave
+
+- **Factories**: Generan datos falsos consistentes para desarrollo y testing
+- **Faker**: Biblioteca para generar datos falsos realistas
+- **Comandos Artisan**: `-m` para migración, `-f` para factory
+- **Consistencia**: Mantener la estructura de datos coherente entre migraciones y factories
+- **Asignación masiva**: Uso de `fake()` para generar datos realistas
+- **Relaciones**: Las factories pueden crear automáticamente modelos relacionados
+- **Claves foráneas**: `foreignIdFor()` simplifica la creación de referencias entre tablas
+
+## Beneficios de usar Model Factories
+
+1. **Desarrollo eficiente**: Genera datos de prueba rápidamente
+2. **Testing**: Facilita la creación de datos para pruebas
+3. **Consistencia**: Mantiene la estructura de datos uniforme
+4. **Flexibilidad**: Permite personalizar los datos generados según necesidades específicas
+5. **Relaciones automáticas**: Crea automáticamente los modelos relacionados necesarios
+
+## Comandos útiles para verificar
+
+```bash
+# Ver las tablas creadas
+php artisan migrate:status
+
+# Acceder a Tinker para interactuar con los modelos
+php artisan tinker
+
+# Hacer rollback si es necesario
+php artisan migrate:rollback
+```

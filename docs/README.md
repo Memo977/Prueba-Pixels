@@ -1295,3 +1295,306 @@ $busyEmployers = Employer::has('jobs', '>', 5)->get();
 3. **Flexibilidad**: Múltiples formas de acceder y manipular datos
 4. **Consistencia**: Mantiene la integridad de los datos relacionados
 5. **Productividad**: Reduce significativamente el código necesario para trabajar con relaciones
+
+# Episodio 12 - Pivot Tables and Many-to-Many Relationships
+
+## Introducción a las Relaciones Many-to-Many
+
+Las relaciones muchos a muchos (many-to-many) son fundamentales en las bases de datos cuando necesitamos conectar dos modelos donde cada uno puede estar relacionado con múltiples registros del otro. En nuestro caso, un trabajo puede tener múltiples etiquetas y una etiqueta puede estar asociada a múltiples trabajos.
+
+## Creando el modelo Tag con migración y factory
+
+### Generando el modelo completo
+
+Para crear el modelo Tag junto con su migración y factory, ejecutamos:
+
+```bash
+php artisan make:model Tag -mf
+```
+
+Este comando genera:
+- `app/Models/Tag.php` (el modelo)
+- `database/migrations/create_tags_table.php` (la migración)
+- `database/factories/TagFactory.php` (la factory)
+
+## Configurando la migración de Tags
+
+### Modificando la migración principal
+
+**Archivo:** `create_tags_table.php`
+
+Modificamos la función `up` para incluir el campo `name`:
+
+```php
+public function up(): void
+{
+    Schema::create('tags', function (Blueprint $table) {
+        $table->id();
+        $table->string('name');
+        $table->timestamps();
+    });
+}
+```
+
+### Creando la tabla pivot
+
+Dentro de la misma migración, después de la creación de la tabla `tags`, agregamos la tabla pivot:
+
+```php
+public function up(): void
+{
+    Schema::create('tags', function (Blueprint $table) {
+        $table->id();
+        $table->string('name');
+        $table->timestamps();
+    });
+
+    Schema::create('job_tag', function (Blueprint $table) {
+        $table->id();
+        $table->foreignIdFor(\App\Models\Job::class, 'job_listing_id')->constrained()->cascadeOnDelete();
+        $table->foreignIdFor(\App\Models\Tag::class)->constrained()->cascadeOnDelete();
+        $table->timestamps();
+    });
+}
+```
+
+### Configurando el método down
+
+Para el rollback, actualizamos la función `down`:
+
+```php
+public function down(): void
+{
+    Schema::dropIfExists('job_tag');
+    Schema::dropIfExists('tags');
+}
+```
+
+> **Nota:** Es importante eliminar primero la tabla pivot (`job_tag`) antes que las tablas principales debido a las restricciones de claves foráneas.
+
+## Entendiendo las tablas pivot
+
+### ¿Qué es una tabla pivot?
+
+Una tabla pivot es una tabla intermedia que conecta dos modelos en una relación muchos a muchos. En nuestro caso:
+
+- **Tabla `job_listings`**: Contiene los trabajos
+- **Tabla `tags`**: Contiene las etiquetas
+- **Tabla `job_tag`**: Conecta trabajos con etiquetas
+
+### Estructura de la tabla pivot
+
+```sql
+job_tag:
+- id
+- job_listing_id (clave foránea hacia job_listings)
+- tag_id (clave foránea hacia tags)
+- created_at
+- updated_at
+```
+
+### Restricciones de integridad
+
+Las restricciones `constrained()->cascadeOnDelete()` garantizan:
+
+1. **Integridad referencial**: No se pueden crear relaciones con IDs inexistentes
+2. **Eliminación en cascada**: Si se elimina un trabajo o etiqueta, sus relaciones se eliminan automáticamente
+3. **Prevención de registros huérfanos**: Evita datos inconsistentes en la tabla pivot
+
+## Ejecutando las migraciones
+
+### Aplicando los cambios
+
+Para aplicar los cambios realizados en la migración:
+
+```bash
+php artisan migrate:rollback && php artisan migrate
+```
+
+Este comando:
+1. Revierte la última migración
+2. Ejecuta nuevamente todas las migraciones
+
+### Verificando en la base de datos
+
+En MariaDB, verificamos que las tablas se crearon correctamente:
+
+```sql
+SHOW TABLES;
+```
+
+Deberíamos ver:
+- `tags`
+- `job_tag`
+
+## Consideraciones con SQLite
+
+Si trabajas con SQLite directamente (por ejemplo, con Herd), es necesario activar las restricciones de claves foráneas:
+
+```sql
+PRAGMA foreign_keys = ON;
+```
+
+> **Nota:** Laravel maneja esto automáticamente en la mayoría de entornos, pero es útil conocerlo para desarrollo local.
+
+## Definiendo las relaciones en los modelos
+
+### Configurando el modelo Job
+
+En `app/Models/Job.php`, agregamos la relación many-to-many:
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Job extends Model
+{
+    use HasFactory;
+
+    protected $table = 'job_listings';
+    protected $fillable = ['title', 'salary'];
+
+    public function employer()
+    {
+        return $this->belongsTo(Employer::class);
+    }
+
+    public function tags()
+    {
+        return $this->belongsToMany(Tag::class, foreignPivotKey: "job_listing_id");
+    }
+}
+```
+
+### Configurando el modelo Tag
+
+En `app/Models/Tag.php`, definimos la relación inversa:
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Tag extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['name'];
+
+    public function jobs()
+    {
+        return $this->belongsToMany(Job::class, relatedPivotKey: "job_listing_id");
+    }
+}
+```
+
+## Entendiendo los parámetros de belongsToMany
+
+### Parámetros utilizados
+
+- **`foreignPivotKey`**: Especifica la clave foránea del modelo actual en la tabla pivot
+- **`relatedPivotKey`**: Especifica la clave foránea del modelo relacionado en la tabla pivot
+
+### ¿Por qué necesitamos estos parámetros?
+
+Laravel sigue convenciones de nomenclatura, pero nuestro caso es especial:
+
+- **Convención esperada**: `job_id` en la tabla pivot
+- **Nuestro caso**: `job_listing_id` porque nuestra tabla se llama `job_listings`
+
+## Trabajando con relaciones Many-to-Many
+
+### Usando Tinker para probar las relaciones
+
+```bash
+php artisan tinker
+```
+
+### Asociando tags a trabajos
+
+## Asociando tags a trabajos
+
+```php
+// Obtener un trabajo
+$job = App\Models\Job::first();
+
+// Asociar etiquetas al trabajo usando attach
+$job->tags()->attach([1, 2, 3]);
+
+// O usando el método sync para reemplazar todas las etiquetas
+$job->tags()->sync([1, 2]);
+```
+
+### Consultando relaciones
+
+```php
+// Obtener todas las etiquetas de un trabajo
+$job->tags;
+
+// Obtener todos los trabajos de una etiqueta
+$phpTag = App\Models\Tag::find(1);
+$phpTag->jobs;
+
+// Verificar si un trabajo tiene una etiqueta específica
+$job->tags->contains($phpTag);
+```
+
+## Métodos útiles para relaciones Many-to-Many
+
+### Métodos de manipulación
+
+```php
+// Asociar etiquetas (mantiene las existentes)
+$job->tags()->attach([1, 2, 3]);
+
+// Desasociar etiquetas específicas
+$job->tags()->detach([1, 2]);
+
+// Desasociar todas las etiquetas
+$job->tags()->detach();
+
+// Sincronizar (reemplaza todas las etiquetas)
+$job->tags()->sync([1, 2, 3]);
+
+// Alternar etiquetas (asocia las que no están, desasocia las que sí)
+$job->tags()->toggle([1, 2, 3]);
+```
+
+### Métodos de consulta
+
+```php
+// Contar etiquetas de un trabajo
+$job->tags()->count();
+
+// Verificar si tiene etiquetas
+$job->tags()->exists();
+
+// Obtener trabajos que tienen etiquetas específicas
+$jobsWithPHP = App\Models\Job::whereHas('tags', function($query) {
+    $query->where('name', 'PHP');
+})->get();
+```
+
+## Conceptos clave
+
+- **Tabla Pivot**: Tabla intermedia que conecta dos modelos en relaciones many-to-many
+- **belongsToMany**: Método para definir relaciones muchos a muchos
+- **foreignPivotKey**: Clave foránea del modelo actual en la tabla pivot
+- **relatedPivotKey**: Clave foránea del modelo relacionado en la tabla pivot
+- **Restricciones en cascada**: `cascadeOnDelete()` elimina automáticamente relaciones cuando se elimina un modelo
+- **Integridad referencial**: `constrained()` garantiza que las claves foráneas sean válidas
+
+## Beneficios de las relaciones Many-to-Many
+
+1. **Flexibilidad**: Permite relaciones complejas entre modelos
+2. **Normalización**: Evita duplicación de datos
+3. **Integridad**: Mantiene consistencia en la base de datos
+4. **Eficiencia**: Optimiza consultas y almacenamiento
+5. **Escalabilidad**: Facilita el crecimiento de la aplicación.

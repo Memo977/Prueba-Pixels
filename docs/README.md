@@ -354,4 +354,50 @@ Ahora en cada uno de los siguientes archivos: home, about y contact agregamos lo
 
 Al finalizar el episodio 04, la página debe verse con un diseño profesional utilizando Tailwind CSS, con una navegación moderna y responsiva.
 
-![Pagina Web en ejecución con estilos](./images/01.PNG "Pagina web en ejecucion")
+![Pagina Web responsiva en ejecución con estilos](./images/01.PNG "Pagina web en ejecución responsiva")
+
+## Episodio 05 - Style the Currently Active Navigation Link
+
+### Modificando el layout principal
+
+Realizamos cambios en el archivo `layout.blade.php` para mejorar la estructura del HTML:
+
+```html
+<html lang="en" class="h-full bg-gray-100">
+<body class="h-full">
+```
+
+### Creando el componente nav-link
+
+Creamos un componente personalizado para los enlaces de navegación. Archivo: `nav-link.blade.php` en la carpeta `components`:
+
+```blade
+@props(['active' => false])
+<a class="{{ $active ? 'bg-gray-900 text-white': 'text-gray-300 hover:bg-gray-700 hover:text-white'}} rounded-md px-3 py-2 text-sm font-medium"
+   aria-current="{{ $active ? 'page': 'false' }}"
+   {{ $attributes }}
+>{{ $slot }}</a>
+```
+
+### Implementando la navegación activa
+
+Reemplazamos los enlaces de navegación HTML estático por componentes dinámicos que detectan la página actual:
+
+**Antes:**
+```html
+<!-- Current: "bg-gray-900 text-white", Default: "text-gray-300 hover:bg-gray-700 hover:text-white" -->
+<a href="/" class="bg-gray-900 text-white rounded-md px-3 py-2 text-sm font-medium" aria-current="page">Home</a>
+<a href="/about" class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium">About</a>
+<a href="/contact" class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium">Contact</a>
+```
+
+**Después:**
+```blade
+<x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+<x-nav-link href="/about" :active="request()->is('about')">About</x-nav-link>
+<x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+```
+
+**Resultado:** La barra de navegación ahora cambia el estilo cuando se pasa el mouse por encima de los enlaces.
+
+![Pagina web en ejecución](./images/episodio05.PNG "Pagina web resaltado de la barra de navegacion al pasar el mouse")

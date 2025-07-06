@@ -75,3 +75,117 @@ Las vistas en Laravel se almacenan en la carpeta `resources/views`. Para crear u
 - **Ubicación de rutas:** `routes/web.php`
 - **Función `view()`:** Utilizada para retornar vistas desde las rutas
 - **Extensión de archivos:** Las vistas pueden usar `.blade.php` para aprovechar el motor de plantillas Blade de Laravel
+
+## Episodio 03 - Create a Layout File Using Laravel Components
+
+### Creando nuevas rutas
+
+Se crea una nueva ruta para Contacto:
+
+```php
+Route::get('/contact', function () {
+    return view('contact');
+});
+```
+
+Actualizamos el nombre de welcome a home:
+
+```php
+Route::get('/', function () {
+    return view('home');
+});
+```
+
+### Actualizando las vistas
+
+Por ende también actualizamos la vista, es decir `welcome.blade.php` lo renombramos a `home.blade.php` y actualizamos su contenido:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page</title>
+</head>
+<body>
+    <h1>Hello, from the Home Page... </h1>
+</body>
+</html>
+```
+
+También creamos el archivo `contact.blade.php`:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Page</title>
+</head>
+<body>
+    <h1>Hello, from the Contact Page... </h1>
+</body>
+</html>
+```
+
+### Agregando navegación
+
+Tenemos Home, About y Contact. Vamos a agregar nuestra primera barra de navegación simple en cada vista:
+
+```html
+<nav>
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+    <a href="/contact">Contact</a>
+</nav>
+```
+
+### Creando componentes de layout
+
+Creamos una carpeta dentro de `views` llamada `components` y dentro creamos `layout.blade.php`:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page</title>
+</head>
+<body>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
+    </nav>
+    {{ $slot }}
+</body>
+</html>
+```
+
+### Usando el componente layout
+
+Ahora nuestros archivos tendrán lo siguiente:
+
+**home.blade.php:**
+```html
+<x-layout>
+    <h1>Hello from the Home Page.</h1>
+</x-layout>
+```
+
+**about.blade.php:**
+```html
+<x-layout>
+    <h1>Hello from the About Page.</h1>
+</x-layout>
+```
+
+**contact.blade.php:**
+```html
+<x-layout>
+    <h1>Hello from the Contact Page.</h1>
+</x-layout>
+```

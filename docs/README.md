@@ -1719,3 +1719,116 @@ Con la implementación de eager loading, observamos una mejora significativa en 
 - **Después**: 2 consultas totales (1 para trabajos + 1 para todos los empleadores)
 
 Esta optimización es especialmente importante cuando tenemos muchos registros, ya que la diferencia puede ser dramática (por ejemplo, de 101 consultas a solo 2 consultas para 100 trabajos).
+
+### Episodio 14 - All You Need to Know About Pagination
+
+### Introducción a la paginación
+
+La paginación es una característica esencial en aplicaciones web que permite dividir grandes conjuntos de datos en páginas más pequeñas y manejables. Laravel proporciona un sistema de paginación integrado y fácil de implementar.
+
+### Modificando la ruta Jobs
+
+Actualizamos la ruta en `web.php` para implementar paginación:
+
+```php
+Route::get('/jobs', function () {
+    $jobs = Job::with('employer')->paginate(3);
+    return view('jobs', [
+        'jobs' => $jobs
+    ]);
+});
+```
+
+Este código:
+- Recupera 3 registros de trabajos por página
+- Incluye los empleadores usando eager loading para evitar el problema N+1
+- Utiliza el método `paginate()` en lugar de `all()`
+
+### Actualizando la vista Jobs
+
+Modificamos el archivo `jobs.blade.php` para incluir los enlaces de paginación:
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Job Listings
+    </x-slot:heading>
+    <div class="space-y-4">
+        @foreach ($jobs as $job)
+        <a href="/jobs/{{ $job['id'] }}" class="block px-4 py-6 border border-gray-200 rounded-lg">
+            <div class="font-bold text-blue-500 text-sm">{{ $job->employer->name }}</div>
+            <div>
+                <strong>{{ $job['title'] }}:</strong> Pays {{ $job['salary'] }} per year.
+            </div>
+        </a>
+        @endforeach
+        <div>
+            {{ $jobs->links() }}
+        </div>
+    </div>
+</x-layout>
+```
+
+**Cambios principales:**
+- Agregamos `{{ $jobs->links() }}` para mostrar los enlaces de paginación
+- Mantenemos la estructura del loop `@foreach` existente
+- Los enlaces se muestran debajo de la lista de trabajos
+
+### Personalizar las vistas de paginación
+
+Si deseas modificar el diseño o usar otro framework como Bootstrap, puedes publicar las vistas:
+
+```bash
+php artisan vendor:publish --tag=laravel-pagination
+```
+
+Esto copiará las vistas a:
+```
+resources/views/vendor/pagination
+```
+
+### Usando Bootstrap en lugar de Tailwind
+
+Para cambiar el framework CSS de paginación, agrega esto en `AppServiceProvider`:
+
+```php
+use Illuminate\Pagination\Paginator;
+
+public function boot()
+{
+    Paginator::useBootstrapFive();
+}
+```
+
+### Tipos de paginación
+
+Laravel ofrece diferentes tipos de paginación según tus necesidades:
+
+| Tipo | Descripción | Método |
+|------|-------------|---------|
+| **Paginación estándar** | Números de página + enlaces prev/sig | `paginate()` |
+| **Simple** | Solo muestra "Anterior" y "Siguiente" | `simplePaginate()` |
+| **Cursor** | Usa un cursor codificado, más eficiente | `cursorPaginate()` |
+
+**Ejemplos de uso:**
+
+```php
+// Paginación simple
+Job::with('employer')->simplePaginate(3);
+
+// Paginación con cursor
+Job::with('employer')->cursorPaginate(3);
+```
+
+### Funcionamiento interno
+
+- **`paginate()`**: Utiliza `LIMIT` y `OFFSET` en SQL para obtener los registros
+- **`cursorPaginate()`**: Evita el uso de `OFFSET` y mejora el rendimiento con grandes volúmenes de datos, especialmente útil para datasets que crecen constantemente
+
+### Conceptos clave del episodio
+
+- **Paginación automática**: Laravel maneja automáticamente los parámetros de consulta
+- **Eager loading**: Combinación con `with()` para optimizar consultas
+- **Flexibilidad**: Múltiples tipos de paginación según las necesidades
+- **Personalización**: Posibilidad de modificar el diseño y comportamiento
+- **Rendimiento**: Diferentes estrategias para diferentes casos de uso

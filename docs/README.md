@@ -1,3 +1,25 @@
+# Índice General
+
+## Unidad I - Baby Steps
+- [Episodio 02 - Your First Route and View](#episodio-02---your-first-route-and-view)
+- [Episodio 03 - Create a Layout File Using Laravel Components](#episodio-03---create-a-layout-file-using-laravel-components)
+- [Episodio 04 - Make a Pretty Layout Using Tailwind CSS](#episodio-04---make-a-pretty-layout-using-tailwind-css)
+- [Episodio 05 - Style the Currently Active Navigation Link](#episodio-05---style-the-currently-active-navigation-link)
+- [Episodio 06 - View Data and Route Wildcards](#episodio-06---view-data-and-route-wildcards)
+- [Episodio 07 - Autoloading, Namespaces, and Models](#episodio-07---autoloading-namespaces-and-models)
+
+## Unidad II - Eloquent
+- [Episodio 08 - Introduction to Migrations](#episodio-08---introduction-to-migrations)
+- [Episodio 09 - Meet Eloquent](#episodio-09---meet-eloquent)
+- [Episodio 10 - Model Factories](#episodio-10---model-factories)
+- [Episodio 11 - Eloquent Relationships](#episodio-11---eloquent-relationships)
+- [Episodio 12 - Pivot Tables and Many-to-Many Relationships](#episodio-12---pivot-tables-and-many-to-many-relationships)
+- [Episodio 13 - Eager Loading and the N+1 Problem](#episodio-13---eager-loading-and-the-n1-problem)
+- [Episodio 14 - All You Need to Know About Pagination](#episodio-14---all-you-need-to-know-about-pagination)
+- [Episodio 15 - Understanding Database Seeders](#episodio-15---understanding-database-seeders)
+
+---
+
 # 30 Days to Learn Laravel
 
 ---
@@ -1832,3 +1854,164 @@ Job::with('employer')->cursorPaginate(3);
 - **Flexibilidad**: Múltiples tipos de paginación según las necesidades
 - **Personalización**: Posibilidad de modificar el diseño y comportamiento
 - **Rendimiento**: Diferentes estrategias para diferentes casos de uso
+
+## Episodio 15 - Understanding Database Seeders
+
+En este episodio, se introduce el concepto de "seeders" en Laravel, que son clases utilizadas para poblar la base de datos con datos iniciales. Se muestra cómo crear un seeder para el modelo `Job` y `User` y cómo utilizarlo para generar múltiples registros en la tabla `jobs_listings`.
+
+### Creación de un Seeder para el modelo `Job`
+
+```bash
+php artisan make:seeder JobSeeder
+```
+### Implementación del Seeder
+```php
+public function run(): void
+    {
+        Job::factory(100)->create();
+    }
+```
+### Uso del Seeder en `DatabaseSeeder.php`
+```php
+public function run(): void
+    {
+        // User::factory(10)->create();
+
+        User::factory()->create([
+            'first_name' => 'Guillermo',
+            'last_name' => 'Solórzano',
+            'email' => 'test@example.com',
+        ]);
+
+        $this->call(JobSeeder::class);
+    }
+```
+
+### Ejecución del Seeder
++ Para ejecutar el seeder y poblar la base de datos, utiliza el siguiente comando:
+```bash
+php artisan db:seed
+```
++ Para reiniciar la base de datos y volver a ejecutar todos los seeders, puedes usar el siguiente comando:
+```bash
+php artisan migrate:fresh --seed
+```
++ Para ejecutar un seeder específico, puedes usar el siguiente comando:
+```bash
+php artisan db:seed --class=JobSeeder
+```
+
+### Verificación de los datos insertados
+Puedes verificar los datos insertados en la base de datos desde DBeaver:
+![Datos](./images/16.PNG)
+
+## Episodio 15 - Understanding Database Seeders
+
+### Introducción a los Seeders
+
+Los **seeders** en Laravel permiten poblar la base de datos con datos de prueba de forma automatizada. Son útiles para desarrollo, pruebas y creación rápida de entornos consistentes.
+
+---
+
+### Creando un seeder para el modelo Job
+
+Ejecutamos el comando para generar un seeder:
+
+```bash
+php artisan make:seeder JobSeeder
+```
+
+Esto creará un archivo en: `database/seeders/JobSeeder.php`.
+
+---
+
+### Implementando el JobSeeder
+
+Editamos el archivo generado para usar la factory de `Job` y crear múltiples registros:
+
+```php
+use App\Models\Job;
+
+public function run(): void
+{
+    Job::factory(100)->create();
+}
+```
+
+Esto genera 100 trabajos usando datos falsos.
+
+---
+
+### Usando el seeder en DatabaseSeeder
+
+Editamos el archivo `database/seeders/DatabaseSeeder.php` para llamar a `JobSeeder` y generar también un usuario de ejemplo:
+
+```php
+use App\Models\User;
+use Illuminate\Database\Seeder;
+
+public function run(): void
+{
+    // Crear un usuario de prueba
+    User::factory()->create([
+        'first_name' => 'Guillermo',
+        'last_name' => 'Solórzano',
+        'email' => 'test@example.com',
+    ]);
+
+    // Llamar al seeder de trabajos
+    $this->call(JobSeeder::class);
+}
+```
+
+---
+
+### Ejecutando los seeders
+
+#### 1. Ejecutar todos los seeders
+```bash
+php artisan db:seed
+```
+
+#### 2. Ejecutar un seeder específico
+```bash
+php artisan db:seed --class=JobSeeder
+```
+
+#### 3. Reiniciar base de datos y seedear desde cero
+```bash
+php artisan migrate:fresh --seed
+```
+
+Este comando elimina todas las tablas, las migra de nuevo y ejecuta los seeders.
+
+### Verificando los datos
+
+Podemos inspeccionar los datos generados usando herramientas como DBeaver o el comando:
+
+```php
+App\Models\Job::count();
+```
+
+Con DBeaver
+
+![Datos creados con seeders](./images/16.PNG "Datos creados por seeders")
+
+### Conceptos clave del episodio
+
+- **Seeders**: Automatizan la inserción de datos de prueba
+- **Factories + Seeders**: Combinación poderosa para poblar modelos relacionados
+- **DatabaseSeeder**: Punto de entrada para ejecutar múltiples seeders
+- **Datos consistentes**: Facilitan pruebas repetibles y entornos de desarrollo confiables
+
+---
+
+### Beneficios del uso de Seeders
+
+1. **Agiliza el desarrollo**: Crea entornos completos en segundos  
+2. **Facilita testing**: Proporciona datos para pruebas automatizadas  
+3. **Evita errores humanos**: No requiere inserciones manuales  
+4. **Escenarios realistas**: Genera múltiples combinaciones de datos  
+5. **Repetibilidad**: Reestablece siempre los mismos datos en todos los equipos
+
+_Documentación realizada por Guillermo Antonio Solórzano Ochoa - ISW811_

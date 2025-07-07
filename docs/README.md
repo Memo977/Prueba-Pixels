@@ -1296,9 +1296,9 @@ $busyEmployers = Employer::has('jobs', '>', 5)->get();
 4. **Consistencia**: Mantiene la integridad de los datos relacionados
 5. **Productividad**: Reduce significativamente el código necesario para trabajar con relaciones
 
-# Episodio 12 - Pivot Tables and Many-to-Many Relationships
+## Episodio 12 - Pivot Tables and Many-to-Many Relationships
 
-## Introducción a las Relaciones Many-to-Many
+### Introducción a las Relaciones Many-to-Many
 
 Las relaciones muchos a muchos (many-to-many) son fundamentales en las bases de datos cuando necesitamos conectar dos modelos donde cada uno puede estar relacionado con múltiples registros del otro. En nuestro caso, un trabajo puede tener múltiples etiquetas y una etiqueta puede estar asociada a múltiples trabajos.
 
@@ -1598,3 +1598,124 @@ $jobsWithPHP = App\Models\Job::whereHas('tags', function($query) {
 3. **Integridad**: Mantiene consistencia en la base de datos
 4. **Eficiencia**: Optimiza consultas y almacenamiento
 5. **Escalabilidad**: Facilita el crecimiento de la aplicación.
+
+## Capítulo 13: Eager Loading and the N+1 Problem
+
+### Mejorando la Vista de Trabajos
+
+### Actualización de jobs.blade.php
+
+Comenzamos mejorando la presentación de nuestra vista de trabajos. Navegamos al archivo `resources/views/jobs.blade.php` y reemplazamos el código existente por:
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Job Listings
+    </x-slot:heading>
+    <div class="space-y-4">
+        @foreach ($jobs as $job)
+        <a href="/jobs/{{ $job['id'] }}" class="block px-4 py-6 border border-gray-200 rounded-lg">
+            <div class="font-bold text-blue-500 text-sm">{{ $job->employer->name }}</div>
+            <div>
+                <strong>{{ $job['title'] }}:</strong> Pays {{ $job['salary'] }} per year.
+            </div>
+        </a>
+        @endforeach
+    </div>
+</x-layout>
+```
+
+Este cambio hace que nuestra vista se vea más elegante y profesional, con un diseño de tarjetas que mejora la experiencia del usuario.
+
+## Instalación de Laravel Debugbar
+
+Para monitorear el rendimiento de nuestra aplicación, especialmente las consultas a la base de datos, instalamos Laravel Debugbar:
+
+```bash
+composer require barryvdh/laravel-debugbar --dev
+```
+
+### Configuración del Debug
+
+Es importante asegurarse de que el debugging esté habilitado en el archivo `.env`:
+
+```env
+APP_DEBUG=true
+```
+
+Una vez instalado, veremos una barra de depuración en la parte inferior de nuestras páginas que nos proporciona información valiosa sobre:
+- Consultas a la base de datos
+- Tiempo de respuesta
+- Uso de memoria
+- Variables de sesión
+- Y mucho más
+
+## Optimización con Eager Loading
+
+### Problema del N+1 Query
+
+Inicialmente, nuestra ruta en `routes/web.php` tenía un problema de rendimiento conocido como "N+1 Query Problem":
+
+```php
+Route::get('/jobs', function () {
+    $jobs = Job::all(); // Una consulta para obtener todos los jobs
+    return view('jobs', [
+        'jobs' => $jobs
+    ]);
+});
+```
+
+Con este código, cuando mostramos `$job->employer->name` en la vista, Laravel ejecuta una consulta adicional por cada trabajo para obtener el empleador correspondiente.
+
+### Solución: Eager Loading
+
+Para solucionar este problema, actualizamos la ruta para usar **eager loading**:
+
+```php
+Route::get('/jobs', function () {
+    $jobs = Job::with('employer')->get();
+    return view('jobs', [
+        'jobs' => $jobs
+    ]);
+});
+```
+
+El método `with('employer')` le dice a Laravel que cargue la relación `employer` junto con los trabajos en una sola consulta adicional, reduciendo significativamente el número de consultas a la base de datos.
+
+## Prevención de Lazy Loading
+
+### Configuración en AppServiceProvider
+
+Para detectar y prevenir problemas de lazy loading durante el desarrollo, añadimos la siguiente configuración en `app/Providers/AppServiceProvider.php`:
+
+```php
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Database\Eloquent\Model;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function boot()
+    {
+        Model::preventLazyLoading();
+    }
+}
+```
+
+### Beneficios de Prevenir Lazy Loading
+
+- **Detección temprana**: Nos alerta cuando estamos haciendo consultas lazy loading no intencionadas
+- **Mejor rendimiento**: Nos fuerza a ser explícitos sobre qué relaciones necesitamos cargar
+- **Código más limpio**: Hace que nuestro código sea más predecible y fácil de optimizar
+
+## Impacto en el Rendimiento
+
+Con la implementación de eager loading, observamos una mejora significativa en el rendimiento:
+
+- **Antes**: N+1 consultas (1 consulta para trabajos + 1 consulta por cada trabajo para obtener el empleador)
+- **Después**: 2 consultas totales (1 para trabajos + 1 para todos los empleadores)
+
+Esta optimización es especialmente importante cuando tenemos muchos registros, ya que la diferencia puede ser dramática (por ejemplo, de 101 consultas a solo 2 consultas para 100 trabajos).

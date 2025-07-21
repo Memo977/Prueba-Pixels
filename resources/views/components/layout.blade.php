@@ -15,7 +15,7 @@
                 <div class="flex h-16 items-center justify-between">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <img class="h-8 w-8" src="https://laracasts.com/images/logo/logo-triangle.svg"
+                            <img class="h-8 w-8" src="https://assets.laracasts.com/images/primary-logo-symbol.svg"
                                 alt="Your Company">
                         </div>
                         <div class="hidden md:block">
@@ -49,7 +49,7 @@
                                         <span class="absolute -inset-1.5"></span>
                                         <span class="sr-only">Open user menu</span>
                                         <img class="h-8 w-8 rounded-full"
-                                            src="https://laracasts.com/images/lary-ai-face.svg" alt="">
+                                            src="https://laracasts.com/images/forum/lary-ai-avatar.svg?v=2" alt="">
                                     </button>
                                 </div>
                             </div>

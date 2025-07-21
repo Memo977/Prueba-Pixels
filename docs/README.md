@@ -1,3 +1,5 @@
+# 30 Days to Learn Laravel
+
 # Índice General
 
 ## Unidad I - Baby Steps
@@ -18,9 +20,8 @@
 - [Episodio 14 - All You Need to Know About Pagination](#episodio-14---all-you-need-to-know-about-pagination)
 - [Episodio 15 - Understanding Database Seeders](#episodio-15---understanding-database-seeders)
 
----
-
-# 30 Days to Learn Laravel
+## Unidad III - Forms and Validation
+- [Episodio 16 - Forms and CSRF](#episodio-16---forms-and-csrf)
 
 ---
 # Unidad I - Baby Steps
@@ -2013,5 +2014,167 @@ Con DBeaver
 3. **Evita errores humanos**: No requiere inserciones manuales  
 4. **Escenarios realistas**: Genera múltiples combinaciones de datos  
 5. **Repetibilidad**: Reestablece siempre los mismos datos en todos los equipos
+
+# Unidad III - Forms and Validation
+
+## Episodio 16 - Forms and CSRF
+
+### Introducción a los Formularios y CSRF en Laravel
+
+En este episodio, exploramos cómo utilizar formularios en Laravel para crear nuevos registros en la base de datos, específicamente para el modelo `Job`. También abordamos la protección CSRF (Cross-Site Request Forgery) que Laravel implementa para garantizar la seguridad de los formularios.
+
+### Modificando el archivo de rutas
+
+Modifica el archivo `routes/web.php` para incluir nuevas rutas relacionadas con el modelo `Job`. Estas rutas permiten listar trabajos, mostrar un trabajo individual y crear nuevos trabajos.
+
+**Archivo:** `routes/web.php`
+
+```php
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Models\Job;
+
+Route::get('/', function () {
+    return view('home');
+});
+
+Route::get('/jobs', function () {
+    $jobs = Job::with('employer')->latest()->simplePaginate(3);
+    return view('jobs.index', [
+        'jobs' => $jobs
+    ]);
+});
+
+Route::get('/jobs/create', function () {
+    return view('jobs.create');
+});
+
+Route::get('/jobs/{id}', function () {
+    $job = Job::find($id);
+    return view('jobs.show', ['job' => $job]);
+});
+
+Route::post('/jobs', function () {
+    // validation...
+    Job::create([
+        'title' => request('title'),
+        'salary' => request('salary'),
+        'employer_id' => 1
+    ]);
+    return redirect('/jobs');
+});
+
+Route::get('/contact', function () {
+    return view('contact');
+});
+```
+
+**Detalles de las rutas:**
+- **Ruta `/jobs`**: Utiliza `simplePaginate(3)` para mostrar 3 trabajos por página, con eager loading de la relación `employer` para optimizar las consultas.
+- **Ruta `/jobs/create`**: Muestra un formulario para crear un nuevo trabajo.
+- **Ruta `/jobs/{id}`**: Muestra los detalles de un trabajo específico según su ID.
+- **Ruta POST `/jobs`**: Procesa el formulario para crear un nuevo trabajo, asignando temporalmente un `employer_id` fijo (esto se mejorará en futuros episodios).
+
+### Reorganizando las vistas
+
+Crea una carpeta `jobs` dentro de `resources/views` para organizar las vistas relacionadas con trabajos. Mueve y renombra los archivos existentes de la siguiente manera:
+
+- `jobs.blade.php` → `resources/views/jobs/index.blade.php`
+- `job.blade.php` → `resources/views/jobs/show.blade.php`
+
+### Actualizando el modelo Job
+
+En el archivo `app/Models/Job.php`, reemplaza la propiedad `$fillable` por `$guarded` para permitir la asignación masiva de todos los campos:
+
+**Antes:**
+```php
+protected $fillable = ['title', 'salary'];
+```
+
+**Después:**
+```php
+protected $guarded = [];
+```
+
+**Nota de seguridad:** Usar `$guarded = []` permite la asignación masiva de todos los campos, lo cual es práctico para pruebas rápidas. Sin embargo, en entornos de producción, se recomienda usar `$fillable` para especificar explícitamente los campos permitidos y evitar vulnerabilidades de seguridad.
+
+### Creando el formulario para nuevos trabajos
+
+Crea una nueva vista `create.blade.php` en `resources/views/jobs/` para permitir a los usuarios crear nuevos trabajos mediante un formulario:
+
+**Archivo:** `resources/views/jobs/create.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Create Job
+    </x-slot:heading>
+
+    <form method="POST" action="/jobs">
+        @csrf
+
+        <div class="space-y-12">
+            <div class="border-b border-gray-900/10 pb-12">
+                <h2 class="text-base font-semibold leading-7 text-gray-900">Create a New Job</h2>
+                <p class="mt-1 text-sm leading-6 text-gray-600">We just need a handful of details from you.</p>
+
+                <div class="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                    <div class="sm:col-span-4">
+                        <label for="title" class="block text-sm font-medium leading-6 text-gray-900">Title</label>
+                        <div class="mt-2">
+                            <div class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
+                                <input type="text" name="title" id="title" class="block flex-1 border-0 bg-transparent py-1.5 px-3 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm sm:leading-6" placeholder="Shift Leader">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-4">
+                        <label for="salary" class="block text-sm font-medium leading-6 text-gray-900">Salary</label>
+                        <div class="mt-2">
+                            <div class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
+                                <input type="text" name="salary" id="salary" class="block flex-1 border-0 bg-transparent py-1.5 px-3 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm sm:leading-6" placeholder="$50,000 Per Year">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-end gap-x-6">
+            <button type="button" class="text-sm font-semibold leading-6 text-gray-900">Cancel</button>
+            <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Save</button>
+        </div>
+    </form>
+</x-layout>
+```
+
+**Detalles del formulario:**
+- **Método POST**: Envía los datos al servidor utilizando el método HTTP POST.
+- **Directiva `@csrf`**: Genera un token CSRF para proteger el formulario contra ataques de Cross-Site Request Forgery.
+- **Campos**: Incluye campos para `title` y `salary`, estilizados con Tailwind CSS para una apariencia moderna y responsiva.
+- **Botones**: Contiene un botón "Cancel" (sin funcionalidad por ahora) y un botón "Save" para enviar el formulario.
+
+### Protección CSRF en Laravel
+
+Laravel proporciona protección automática contra ataques CSRF. La directiva `@csrf` en el formulario genera un token único que el servidor valida para asegurar que la solicitud proviene de la aplicación legítima. Esta protección es obligatoria para formularios que utilizan métodos como POST, PUT o DELETE.
+
+### Conceptos clave del episodio
+
+- **Rutas para formularios**: Define rutas GET para mostrar formularios y POST para procesar los datos enviados.
+- **Organización de vistas**: Agrupa las vistas relacionadas en una carpeta `jobs` para una mejor estructura.
+- **Asignación masiva**: Utiliza `$fillable` o `$guarded` para controlar qué campos se pueden asignar masivamente en los modelos Eloquent.
+- **Protección CSRF**: Implementa la directiva `@csrf` para asegurar la seguridad de los formularios.
+- **Diseño con Tailwind**: Crea formularios con una interfaz moderna y responsiva usando Tailwind CSS.
+
+### Beneficios de los cambios realizados
+
+1. **Funcionalidad de creación**: Permite a los usuarios crear nuevos trabajos directamente desde la interfaz web.
+2. **Seguridad**: La protección CSRF garantiza que las solicitudes sean legítimas y seguras.
+3. **Organización**: Las vistas relacionadas con trabajos están organizadas en una carpeta dedicada.
+4. **Escalabilidad**: La estructura actual facilita la adición de funcionalidades futuras, como validaciones de formulario.
+5. **Experiencia de usuario**: El formulario utiliza Tailwind CSS para ofrecer un diseño profesional y consistente.
+
+![Imagen del Episodio 16](./images/17.PNG "Vista del formulario para crear un trabajo")
 
 _Documentación realizada por Guillermo Antonio Solórzano Ochoa - ISW811_

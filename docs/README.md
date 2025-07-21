@@ -23,6 +23,7 @@
 ## Unidad III - Forms and Validation
 - [Episodio 16 - Forms and CSRF](#episodio-16---forms-and-csrf)
 - [Episodio 17 - Always Validate. Never Trust the User](#episodio-17---always-validate-never-trust-the-user)
+- [Episodio 18 - Editing, Updating, and Deleting a Resource](#episodio-18---editing-updating-and-deleting-a-resource)
 
 ---
 # Unidad I - Baby Steps
@@ -2469,5 +2470,209 @@ El botón "Create Job" aparece en la página de trabajos, y el formulario requie
 3. **Consistencia visual**: El componente de botón mejora la apariencia y reusabilidad en toda la aplicación.
 4. **Accesibilidad**: El botón "Create Job" facilita la creación de nuevos trabajos desde la vista principal.
 5. **Mantenibilidad**: La estructura modular permite ajustes futuros sin afectar otras partes del código.
+
+## Episodio 18 - Editing, Updating, and Deleting a Resource
+
+### Introducción a la Gestión de Recursos en Laravel
+
+En este episodio, implementamos funcionalidades para editar, actualizar y eliminar recursos del modelo `Job` utilizando rutas GET, PATCH y DELETE. También creamos y actualizamos las vistas correspondientes para gestionar estas acciones.
+
+### Modificando el archivo web.php
+
+Edita el archivo `routes/web.php` para agregar rutas de edición, actualización y eliminación de trabajos.
+
+**Archivo:** `routes/web.php`
+
+```php
+// Edit
+Route::get('/jobs/{id}/edit', function ($id) {
+    $job = Job::find($id);
+
+    return view('jobs.edit', ['job' => $job]);
+});
+
+// Update
+Route::patch('/jobs/{id}', function ($id) {
+    request()->validate([
+        'title' => ['required', 'min:3'],
+        'salary' => ['required']
+    ]);
+
+    // authorize (On hold...)
+
+    $job = Job::findOrFail($id);
+
+    $job->update([
+        'title' => request('title'),
+        'salary' => request('salary'),
+    ]);
+
+    return redirect('/jobs/' . $job->id);
+});
+
+// Destroy
+Route::delete('/jobs/{id}', function ($id) {
+    // authorize (On hold...)
+
+    Job::findOrFail($id)->delete();
+
+    return redirect('/jobs');
+});
+```
+
+**Detalles de las rutas:**
+- **GET `/jobs/{id}/edit`**: Muestra un formulario de edición para un trabajo específico.
+- **PATCH `/jobs/{id}`**: Valida y actualiza los datos de un trabajo existente, redirigiendo a la vista del trabajo actualizado.
+- **DELETE `/jobs/{id}`**: Elimina un trabajo y redirige a la lista de trabajos.
+- **Nota**: La autorización (`authorize`) está pendiente de implementación en episodios futuros.
+
+### Actualizando la vista show.blade.php
+
+Edita el archivo `show.blade.php` en `resources/views/jobs/` para incluir un botón de edición.
+
+**Archivo:** `resources/views/jobs/show.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Job
+    </x-slot:heading>
+
+    <h2 class="font-bold text-lg">{{ $job->title }}</h2>
+
+    <p>
+        This job pays {{ $job->salary }} per year.
+    </p>
+
+    <p class="mt-6">
+        <x-button href="/jobs/{{ $job->id }}/edit">Edit Job</x-button>
+    </p>
+</x-layout>
+```
+
+**Detalles de la vista:**
+- Agrega un botón "Edit Job" que enlaza a la ruta de edición del trabajo específico.
+
+### Creando la vista edit.blade.php
+
+Crea un nuevo archivo `edit.blade.php` en `resources/views/jobs/` para el formulario de edición.
+
+**Archivo:** `resources/views/jobs/edit.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Edit Job: {{ $job->title }}
+    </x-slot:heading>
+
+    <form method="POST" action="/jobs/{{ $job->id }}">
+        @csrf
+        @method('PATCH')
+
+        <div class="space-y-12">
+            <div class="border-b border-gray-900/10 pb-12">
+                <div class="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                    <div class="sm:col-span-4">
+                        <label for="title" class="block text-sm font-medium leading-6 text-gray-900">Title</label>
+                        <div class="mt-2">
+                            <div class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
+                                <input
+                                    type="text"
+                                    name="title"
+                                    id="title"
+                                    class="block flex-1 border-0 bg-transparent py-1.5 px-3 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm sm:leading-6"
+                                    placeholder="Shift Leader"
+                                    value="{{ $job->title }}"
+                                    required>
+                            </div>
+
+                            @error('title')
+                                <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-4">
+                        <label for="salary" class="block text-sm font-medium leading-6 text-gray-900">Salary</label>
+                        <div class="mt-2">
+                            <div class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
+                                <input
+                                    type="text"
+                                    name="salary"
+                                    id="salary"
+                                    class="block flex-1 border-0 bg-transparent py-1.5 px-3 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm sm:leading-6"
+                                    placeholder="$50,000 Per Year"
+                                    value="{{ $job->salary }}"
+                                    required>
+                            </div>
+
+                            @error('salary')
+                                <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-between gap-x-6">
+            <div class="flex items-center">
+                <button form="delete-form" class="text-red-500 text-sm font-bold">Delete</button>
+            </div>
+
+            <div class="flex items-center gap-x-6">
+                <a href="/jobs/{{ $job->id }}" class="text-sm font-semibold leading-6 text-gray-900">Cancel</a>
+
+                <div>
+                    <button type="submit"
+                            class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                        Update
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <form method="POST" action="/jobs/{{ $job->id }}" id="delete-form" class="hidden">
+        @csrf
+        @method('DELETE')
+    </form>
+</x-layout>
+```
+
+**Detalles de la vista:**
+- **Formulario de edición**: Usa `PATCH` para actualizar el trabajo, con campos prellenados con los valores actuales.
+- **Validación**: Incluye las mismas reglas de validación que en la creación (`required`, `min:3` para `title`).
+- **Botones**: Incluye "Update" para guardar cambios, "Cancel" para regresar, y "Delete" para eliminar el trabajo.
+- **Formulario oculto**: Un formulario `DELETE` oculto se activa con el botón "Delete".
+
+### Actualizando el componente button.blade.php
+
+Edita el archivo `button.blade.php` en `resources/views/components/` para quitar el margen izquierdo.
+
+**Archivo:** `resources/views/components/button.blade.php`
+
+```blade
+<a {{ $attributes->merge(['class' => 'relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 leading-5 rounded-md hover:text-gray-500 focus:outline-none focus:ring ring-gray-300 focus:border-blue-300 active:bg-gray-100 active:text-gray-700 transition ease-in-out duration-150 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:focus:border-blue-700 dark:active:bg-gray-700 dark:active:text-gray-300']) }}>{{ $slot }}</a>
+```
+
+**Detalles del componente:**
+- Elimina `ml-3` del atributo `class` para ajustar el espaciado del botón según el contexto.
+
+### Conceptos clave del episodio
+
+- **Rutas CRUD**: Implementa rutas para editar, actualizar y eliminar recursos.
+- **Métodos HTTP**: Usa `GET`, `PATCH`, y `DELETE` para gestionar recursos de manera adecuada.
+- **Validación persistente**: Aplica las mismas reglas de validación en la edición que en la creación.
+- **Formularios ocultos**: Utiliza `@method('DELETE')` para manejar eliminaciones desde un formulario.
+- **Reusabilidad**: Actualiza el componente de botón para mayor flexibilidad en el diseño.
+
+### Beneficios de los cambios realizados
+
+1. **Gestión completa**: Permite editar, actualizar y eliminar trabajos de forma eficiente.
+2. **Seguridad**: La validación asegura datos consistentes al actualizar.
+3. **Experiencia de usuario**: Botones claros y formularios intuitivos mejoran la interacción.
+4. **Modularidad**: El componente de botón adaptado facilita su uso en diferentes contextos.
+5. **Escalabilidad**: La estructura soporta futuras mejoras, como la autorización pendiente.
 
 _Documentación realizada por Guillermo Antonio Solórzano Ochoa - ISW811_

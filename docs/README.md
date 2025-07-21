@@ -26,6 +26,9 @@
 - [Episodio 18 - Editing, Updating, and Deleting a Resource](#episodio-18---editing-updating-and-deleting-a-resource)
 - [Episodio 19 - Routes Reloaded - 6 Essential Tips](#episodio-19---routes-reloaded---6-essential-tips)
 
+## Unidad IV - Autentication and Segurity
+- [Episodio 20 - Starter Kits, Breeze, and Middleware](#episodio-20---starter-kits-breeze-and-middleware)
+
 ---
 # Unidad I - Baby Steps
 
@@ -2823,5 +2826,176 @@ Route::resource('jobs', JobController::class);
 3. **Mantenimiento**: La lógica centralizada facilita las actualizaciones.
 4. **Consistencia**: Las rutas y validaciones están estandarizadas.
 5. **Usabilidad**: La paginación mejora la experiencia del usuario.
+
+# Unidad IV - Autenticación y Seguridad
+
+## Episodio 20 - Starter Kits, Breeze, and Middleware
+
+### Introducción a Starter Kits y Laravel Breeze
+
+En este episodio, exploramos los starter kits de Laravel, con un enfoque en Laravel Breeze, una herramienta que proporciona una autenticación rápida y completa. También introducimos el concepto de middleware, un componente clave para proteger rutas y gestionar flujos de autenticación. Estos conceptos serán fundamentales para implementar autenticación en proyectos futuros.
+
+### ¿Qué es Laravel Breeze?
+
+Laravel Breeze es un starter kit que ofrece funcionalidades de autenticación preconfiguradas, incluyendo:
+- Registro de usuarios
+- Inicio de sesión
+- Restablecimiento de contraseñas
+- Gestión de perfil
+
+### Métodos de Instalación
+
+#### Opción 1: Proyecto Nuevo con Breeze
+Crea un nuevo proyecto Laravel con Breeze desde cero:
+```bash
+laravel new app
+```
+Durante la instalación, selecciona Breeze como starter kit cuando se te solicite.
+
+#### Opción 2: Instalación en Proyecto Existente
+Instala Breeze manualmente en un proyecto existente:
+```bash
+composer require laravel/breeze --dev
+php artisan breeze:install
+npm install
+npm run dev
+php artisan migrate
+```
+
+### Opciones de Frontend
+Breeze soporta varios stacks de frontend:
+- Blade con JavaScript (tradicional)
+- React con Inertia.js
+- Vue con Inertia.js
+- Livewire
+Para este tutorial, se recomienda el stack de Blade sin modo oscuro.
+
+### Comandos para Ejecutar la Aplicación
+- Usando el servidor de desarrollo de Laravel:
+  ```bash
+  php artisan serve
+  ```
+- Con Laravel Herd, accede directamente via URL local.
+
+### Funcionalidades Incluidas
+1. **Formularios de Registro y Login**: Validación automática, hash seguro de contraseñas y manejo de errores.
+2. **Dashboard Protegido**: Accesible solo para usuarios autenticados con redirección automática.
+3. **Gestión de Perfil**: Edición de datos personales, actualización de contraseñas y eliminación de cuenta.
+4. **Funcionalidad de Logout**: Cierre seguro de sesión y limpieza de datos.
+5. **Middleware de Protección**: Rutas protegidas con redirección de invitados.
+
+### Cómo Funciona la Autenticación
+
+#### Middleware de Protección
+Ejemplo de uso de middleware en rutas:
+```php
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/dashboard', function () {
+        return view('dashboard');
+    })->name('dashboard');
+});
+```
+
+#### Acceso al Usuario Autenticado
+- Usando el facade `Auth`:
+  ```php
+  $user = Auth::user();
+  ```
+- Usando el helper `auth()`:
+  ```php
+  $user = auth()->user();
+  ```
+- En Blade:
+  ```blade
+  @auth
+      Bienvenido, {{ auth()->user()->name }}!
+  @endauth
+  ```
+
+#### Componentes Blade Incluidos
+Breeze proporciona componentes reutilizables:
+- Layouts: `<x-app-layout>`, `<x-guest-layout>`
+- Formularios: `<x-input-label>`, `<x-text-input>`, `<x-primary-button>`
+- Errores: `<x-input-error>`
+
+### Estructura de Archivos Creados
+- **Controladores**: `app/Http/Controllers/Auth/AuthenticatedSessionController.php`, `ConfirmablePasswordController.php`, etc.
+- **Vistas**: `resources/views/auth/login.blade.php`, `register.blade.php`, etc.
+- **Perfiles**: `resources/views/profile/edit.blade.php`, `partials/`
+
+### Middleware Explicado
+- **`auth`**: Verifica si el usuario está autenticado y redirige al login si no lo está.
+- **`verified`**: Comprueba si el email está verificado y redirige a la verificación si no lo está.
+
+### Rutas Creadas Automáticamente
+Ejemplo en `routes/auth.php`:
+```php
+Route::middleware('guest')->group(function () {
+    Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
+    Route::post('register', [RegisteredUserController::class, 'store']);
+    Route::get('login', [AuthenticatedSessionController::class, 'create'])->name('login');
+    Route::post('login', [AuthenticatedSessionController::class, 'store']);
+    // Más rutas...
+});
+
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', function () {
+        return view('dashboard');
+    })->name('dashboard');
+    // Más rutas protegidas...
+});
+```
+
+### Comandos Útiles Post-Instalación
+- Ver todas las rutas:
+  ```bash
+  php artisan route:list
+  ```
+- Ver rutas específicas:
+  ```bash
+  php artisan route:list --name=login
+  php artisan route:list --name=register
+  ```
+- Limpiar caché:
+  ```bash
+  php artisan config:clear
+  php artisan route:clear
+  php artisan view:clear
+  ```
+
+### Comandos de Verificación
+- Estado de migraciones:
+  ```bash
+  php artisan migrate:status
+  ```
+- Contar usuarios:
+  ```bash
+  php artisan tinker
+  >>> User::count()
+  ```
+- Ver logs:
+  ```bash
+  tail -f storage/logs/laravel.log
+  ```
+
+### Ventajas de Usar Breeze
+1. **Ahorro de Tiempo**: Autenticación lista sin empezar de cero.
+2. **Mejores Prácticas**: Implementa seguridad y estructura estándar.
+3. **Educacional**: Código fuente para aprender autenticación.
+4. **Personalizable**: Base sólida para modificaciones.
+
+### Próximos Pasos
+En el siguiente episodio, exploraremos la autenticación manual, conceptos subyacentes y personalización del sistema.
+
+### Conceptos clave del episodio
+- **Starter Kits**: Herramientas como Breeze aceleran el desarrollo.
+- **Breeze**: Proporciona autenticación preconfigurada.
+- **Middleware**: Filtra y protege las rutas de la aplicación.
+
+### Beneficios de los cambios realizados
+1. **Preparación**: Introduce herramientas para autenticación futura.
+2. **Aprendizaje**: Conceptos clave para entender Laravel.
+3. **Flexibilidad**: Base para personalizar autenticación.
+4. **Seguridad**: Mejores prácticas integradas.
 
 _Documentación realizada por Guillermo Antonio Solórzano Ochoa - ISW811_

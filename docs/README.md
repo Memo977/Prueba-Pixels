@@ -20,14 +20,15 @@
 - [Episodio 14 - All You Need to Know About Pagination](#episodio-14---all-you-need-to-know-about-pagination)
 - [Episodio 15 - Understanding Database Seeders](#episodio-15---understanding-database-seeders)
 
-## Unidad III - Forms and Validation
+## Unidad III - Forms
 - [Episodio 16 - Forms and CSRF](#episodio-16---forms-and-csrf)
 - [Episodio 17 - Always Validate. Never Trust the User](#episodio-17---always-validate-never-trust-the-user)
 - [Episodio 18 - Editing, Updating, and Deleting a Resource](#episodio-18---editing-updating-and-deleting-a-resource)
 - [Episodio 19 - Routes Reloaded - 6 Essential Tips](#episodio-19---routes-reloaded---6-essential-tips)
 
-## Unidad IV - Autentication and Segurity
+## Unidad IV - Authentication
 - [Episodio 20 - Starter Kits, Breeze, and Middleware](#episodio-20---starter-kits-breeze-and-middleware)
+- [Episodio 21 - Make a Login and Registration System From Scratch: Part 1](#episodio-21---make-a-login-and-registration-system-from-scratch-part-1)
 
 ---
 # Unidad I - Baby Steps
@@ -2021,7 +2022,7 @@ Con DBeaver
 4. **Escenarios realistas**: Genera múltiples combinaciones de datos  
 5. **Repetibilidad**: Reestablece siempre los mismos datos en todos los equipos
 
-# Unidad III - Forms and Validation
+# Unidad III - Forms
 
 ## Episodio 16 - Forms and CSRF
 
@@ -2827,7 +2828,7 @@ Route::resource('jobs', JobController::class);
 4. **Consistencia**: Las rutas y validaciones están estandarizadas.
 5. **Usabilidad**: La paginación mejora la experiencia del usuario.
 
-# Unidad IV - Autenticación y Seguridad
+# Unidad IV - Authentication
 
 ## Episodio 20 - Starter Kits, Breeze, and Middleware
 
@@ -2997,5 +2998,530 @@ En el siguiente episodio, exploraremos la autenticación manual, conceptos subya
 2. **Aprendizaje**: Conceptos clave para entender Laravel.
 3. **Flexibilidad**: Base para personalizar autenticación.
 4. **Seguridad**: Mejores prácticas integradas.
+
+# Episodio 21 - Make a Login and Registration System From Scratch: Part 1
+
+## Introducción al Sistema de Autenticación Personalizado
+
+En este episodio, comenzamos a construir un sistema de autenticación desde cero para nuestra aplicación Laravel, enfocándonos en las funcionalidades de registro e inicio de sesión. Implementamos rutas, vistas, controladores y componentes reutilizables para formularios, siguiendo una estructura modular y estilizada con Tailwind CSS. Este episodio sienta las bases para un sistema de autenticación flexible, que se completará en capítulos futuros con validaciones, hash de contraseñas y manejo de sesiones.
+
+## Modificando el Archivo de Rutas
+
+Actualizamos el archivo `routes/web.php` para incluir las rutas necesarias para el registro y el inicio de sesión, utilizando controladores específicos para manejar estas acciones.
+
+**Archivo:** `routes/web.php`
+
+```php
+<?php
+
+use App\Http\Controllers\JobController;
+use App\Http\Controllers\RegisteredUserController;
+use App\Http\Controllers\SessionController;
+use Illuminate\Support\Facades\Route;
+
+Route::view('/', 'home');
+Route::view('/contact', 'contact');
+
+Route::resource('jobs', JobController::class);
+
+// Auth
+Route::get('/register', [RegisteredUserController::class, 'create']);
+Route::post('/register', [RegisteredUserController::class, 'store']);
+
+Route::get('/login', [SessionController::class, 'create']);
+Route::post('/login', [SessionController::class, 'store']);
+```
+
+**Detalles de las rutas:**
+- **`Route::get('/register', ...)`**: Muestra el formulario de registro.
+- **`Route::post('/register', ...)`**: Procesa los datos enviados desde el formulario de registro.
+- **`Route::get('/login', ...)`**: Muestra el formulario de inicio de sesión.
+- **`Route::post('/login', ...)`**: Procesa los datos enviados desde el formulario de inicio de sesión.
+- **Controladores**: Usa `RegisteredUserController` para registro y `SessionController` para inicio de sesión.
+
+## Actualizando el Layout Principal
+
+Modificamos el archivo `resources/views/components/layout.blade.php` para incluir enlaces dinámicos de autenticación (Log In y Register) en la barra de navegación, visibles solo para usuarios no autenticados.
+
+**Archivo:** `resources/views/components/layout.blade.php`
+
+```blade
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Website</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="h-full">
+<div class="min-h-full">
+    <nav class="bg-gray-800">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="flex h-16 items-center justify-between">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <img class="h-8 w-8" src="https://laracasts.com/images/logo/logo-triangle.svg"
+                             alt="Your Company">
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-10 flex items-baseline space-x-4">
+                            <x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+                            <x-nav-link href="/jobs" :active="request()->is('jobs')">Jobs</x-nav-link>
+                            <x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+                        </div>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-4 flex items-center md:ml-6">
+                        @guest
+                            <x-nav-link href="/login" :active="request()->is('login')">Log In</x-nav-link>
+                            <x-nav-link href="/register" :active="request()->is('register')">Register</x-nav-link>
+                        @endguest
+                    </div>
+                </div>
+                <div class="-mr-2 flex md:hidden">
+                    <!-- Mobile menu button -->
+                    <button type="button"
+                            class="relative inline-flex items-center justify-center rounded-md bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800"
+                            aria-controls="mobile-menu" aria-expanded="false">
+                        <span class="absolute -inset-0.5"></span>
+                        <span class="sr-only">Open main menu</span>
+                        <svg class="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                             stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+                        </svg>
+                        <svg class="hidden h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                             stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile menu, show/hide based on menu state. -->
+        <div class="md:hidden" id="mobile-menu">
+            <div class="space-y-1 px-2 pb-3 pt-2 sm:px-3">
+                <x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+                <x-nav-link href="/jobs" :active="request()->is('jobs')">Jobs</x-nav-link>
+                <x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+            </div>
+            <div class="border-t border-gray-700 pb-3 pt-4">
+                <div class="flex items-center px-5">
+                    <div class="flex-shrink-0">
+                        <img class="h-10 w-10 rounded-full" src="https://laracasts.com/images/lary-ai-face.svg"
+                             alt="">
+                    </div>
+                    <div class="ml-3">
+                        <div class="text-base font-medium leading-none text-white">Lary Robot</div>
+                        <div class="text-sm font-medium leading-none text-gray-400">jeffrey@laracasts.com</div>
+                    </div>
+                    <button type="button"
+                            class="relative ml-auto flex-shrink-0 rounded-full bg-gray-800 p-1 text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800">
+                        <span class="absolute -inset-1.5"></span>
+                        <span class="sr-only">View notifications</span>
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                             stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <header class="bg-white shadow">
+        <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 sm:flex sm:justify-between">
+            <h1 class="text-3xl font-bold tracking-tight text-gray-900">{{ $heading }}</h1>
+            <x-button href="/jobs/create">Create Job</x-button>
+        </div>
+    </header>
+
+    <main>
+        <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+            {{ $slot }}
+        </div>
+    </main>
+</div>
+</body>
+</html>
+```
+
+**Detalles del layout:**
+- **Directiva `@guest`**: Muestra los enlaces "Log In" y "Register" solo si el usuario no está autenticado.
+- **Componente `<x-nav-link>`**: Reutiliza el componente de navegación para mantener consistencia en el diseño.
+- **Tailwind CSS**: Estiliza la barra de navegación con un diseño moderno y responsivo.
+
+## Creando Componentes Reutilizables para Formularios
+
+Creamos una serie de componentes Blade en `resources/views/components/` para estandarizar los formularios de autenticación y creación de trabajos, asegurando consistencia en el diseño.
+
+### `form-button.blade.php`
+
+**Archivo:** `resources/views/components/form-button.blade.php`
+
+```blade
+<button {{ $attributes->merge(['class' => 'rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600', 'type' => 'submit']) }}>
+    {{ $slot }}
+</button>
+```
+
+**Detalles:**
+- Define un botón de envío estilizado con Tailwind CSS.
+- Usa `$attributes->merge()` para combinar clases predeterminadas con personalizaciones.
+
+### `form-error.blade.php`
+
+**Archivo:** `resources/views/components/form-error.blade.php`
+
+```blade
+@props(['name'])
+
+@error($name)
+    <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+@enderror
+```
+
+**Detalles:**
+- Muestra mensajes de error de validación para un campo específico, estilizados en rojo.
+
+### `form-field.blade.php`
+
+**Archivo:** `resources/views/components/form-field.blade.php`
+
+```blade
+<div class="sm:col-span-4">
+    {{ $slot }}
+</div>
+```
+
+**Detalles:**
+- Define un contenedor para campos de formulario, compatible con la cuadrícula de Tailwind CSS.
+
+### `form-input.blade.php`
+
+**Archivo:** `resources/views/components/form-input.blade.php`
+
+```blade
+<div class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
+    <input {{ $attributes->merge(['class' => 'block flex-1 border-0 bg-transparent py-1.5 px-3 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm sm:leading-6']) }}>
+</div>
+```
+
+**Detalles:**
+- Define un campo de entrada estilizado, con soporte para atributos dinámicos como `type` y `required`.
+
+### `form-label.blade.php`
+
+**Archivo:** `resources/views/components/form-label.blade.php`
+
+```blade
+<label {{ $attributes->merge(['class' => 'block text-sm font-medium leading-6 text-gray-900']) }}>{{ $slot }}</label>
+```
+
+**Detalles:**
+- Define una etiqueta para campos de formulario, estilizada para consistencia.
+
+## Creando Vistas de Autenticación
+
+Creamos una carpeta `auth` en `resources/views/` para almacenar las vistas relacionadas con autenticación.
+
+### Formulario de Inicio de Sesión - `login.blade.php`
+
+**Archivo:** `resources/views/auth/login.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Log In
+    </x-slot:heading>
+
+    <form method="POST" action="/login">
+        @csrf
+
+        <div class="space-y-12">
+            <div class="border-b border-gray-900/10 pb-12">
+                <div class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                    <x-form-field>
+                        <x-form-label for="email">Email</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="email" id="email" type="email" required />
+                            <x-form-error name="email" />
+                        </div>
+                    </x-form-field>
+
+                    <x-form-field>
+                        <x-form-label for="password">Password</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="password" id="password" type="password" required />
+                            <x-form-error name="password" />
+                        </div>
+                    </x-form-field>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-end gap-x-6">
+            <a href="/" class="text-sm font-semibold leading-6 text-gray-900">Cancel</a>
+            <x-form-button>Log In</x-form-button>
+        </div>
+    </form>
+</x-layout>
+```
+
+**Detalles:**
+- Usa componentes reutilizables (`x-form-field`, `x-form-label`, `x-form-input`, `x-form-error`, `x-form-button`).
+- Incluye `@csrf` para protección contra ataques CSRF.
+- Campos `email` y `password` son obligatorios (`required`).
+
+### Formulario de Registro - `register.blade.php`
+
+**Archivo:** `resources/views/auth/register.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Register
+    </x-slot:heading>
+
+    <form method="POST" action="/register">
+        @csrf
+
+        <div class="space-y-12">
+            <div class="border-b border-gray-900/10 pb-12">
+                <div class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                    <x-form-field>
+                        <x-form-label for="first_name">First Name</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="first_name" id="first_name" required />
+                            <x-form-error name="first_name" />
+                        </div>
+                    </x-form-field>
+
+                    <x-form-field>
+                        <x-form-label for="last_name">Last Name</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="last_name" id="last_name" required />
+                            <x-form-error name="last_name" />
+                        </div>
+                    </x-form-field>
+
+                    <x-form-field>
+                        <x-form-label for="email">Email</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="email" id="email" type="email" required />
+                            <x-form-error name="email" />
+                        </div>
+                    </x-form-field>
+
+                    <x-form-field>
+                        <x-form-label for="password">Password</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="password" id="password" type="password" required />
+                            <x-form-error name="password" />
+                        </div>
+                    </x-form-field>
+
+                    <x-form-field>
+                        <x-form-label for="password_confirmation">Confirm Password</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="password_confirmation" id="password_confirmation" type="password" required />
+                            <x-form-error name="password_confirmation" />
+                        </div>
+                    </x-form-field>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-end gap-x-6">
+            <a href="/" class="text-sm font-semibold leading-6 text-gray-900">Cancel</a>
+            <x-form-button>Register</x-form-button>
+        </div>
+    </form>
+</x-layout>
+```
+
+**Detalles:**
+- Incluye campos para `first_name`, `last_name`, `email`, `password`, y `password_confirmation`.
+- Usa componentes reutilizables para mantener consistencia con el formulario de inicio de sesión.
+- Incluye `@csrf` para seguridad.
+
+## Creando Controladores de Autenticación
+
+Creamos dos controladores en `app/Http/Controllers/` para manejar la lógica de registro e inicio de sesión.
+
+### `RegisteredUserController.php`
+
+**Archivo:** `app/Http/Controllers/RegisteredUserController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+
+class RegisteredUserController extends Controller
+{
+    public function create()
+    {
+        return view('auth.register');
+    }
+
+    public function store()
+    {
+        dd(request()->all());
+    }
+}
+```
+
+**Detalles:**
+- **Método `create`**: Retorna la vista del formulario de registro.
+- **Método `store`**: Actualmente usa `dd()` para depurar los datos enviados; se implementará la lógica de registro en futuros episodios.
+
+### `SessionController.php`
+
+**Archivo:** `app/Http/Controllers/SessionController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+
+class SessionController extends Controller
+{
+    public function create()
+    {
+        return view('auth.login');
+    }
+
+    public function store()
+    {
+        dd(request()->all());
+    }
+}
+```
+
+**Detalles:**
+- **Método `create`**: Retorna la vista del formulario de inicio de sesión.
+- **Método `store`**: Actualmente usa `dd()` para depurar; se implementará la lógica de autenticación más adelante.
+
+## Actualizando el Formulario de Creación de Trabajos
+
+Modificamos el archivo `resources/views/jobs/create.blade.php` para usar los componentes reutilizables creados, asegurando consistencia con los formularios de autenticación.
+
+**Archivo:** `resources/views/jobs/create.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Create Job
+    </x-slot:heading>
+
+    <form method="POST" action="/jobs">
+        @csrf
+
+        <div class="space-y-12">
+            <div class="border-b border-gray-900/10 pb-12">
+                <h2 class="text-base font-semibold leading-7 text-gray-900">Create a New Job</h2>
+                <p class="mt-1 text-sm leading-6 text-gray-600">We just need a handful of details from you.</p>
+
+                <div class="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                    <x-form-field>
+                        <x-form-label for="title">Title</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="title" id="title" placeholder="CEO" />
+                            <x-form-error name="title" />
+                        </div>
+                    </x-form-field>
+
+                    <x-form-field>
+                        <x-form-label for="salary">Salary</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="salary" id="salary" placeholder="$50,000 USD" />
+                            <x-form-error name="salary" />
+                        </div>
+                    </x-form-field>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-end gap-x-6">
+            <button type="button" class="text-sm font-semibold leading-6 text-gray-900">Cancel</button>
+            <x-form-button>Save</x-form-button>
+        </div>
+    </form>
+</x-layout>
+```
+
+**Detalles:**
+- Reemplaza los campos de entrada manuales con los componentes `x-form-field`, `x-form-label`, `x-form-input`, `x-form-error`, y `x-form-button`.
+- Mantiene la misma estructura visual y funcionalidad, pero con un diseño más consistente.
+
+## Estructura de Archivos
+
+La estructura de archivos actualizada incluye los nuevos componentes y vistas de autenticación:
+
+```
+app/Http/Controllers/
+├── JobController.php
+├── RegisteredUserController.php
+├── SessionController.php
+
+resources/views/
+├── auth/
+│   ├── login.blade.php
+│   ├── register.blade.php
+├── components/
+│   ├── button.blade.php
+│   ├── form-button.blade.php
+│   ├── form-error.blade.php
+│   ├── form-field.blade.php
+│   ├── form-input.blade.php
+│   ├── form-label.blade.php
+│   ├── layout.blade.php
+│   ├── nav-link.blade.php
+├── jobs/
+│   ├── create.blade.php
+│   ├── edit.blade.php
+│   ├── index.blade.php
+│   ├── show.blade.php
+├── contact.blade.php
+├── home.blade.php
+
+routes/
+└── web.php
+```
+
+## Resultado Visual
+
+Los formularios de registro e inicio de sesión se ven modernos y consistentes gracias a Tailwind CSS y los componentes reutilizables.
+
+![Formulario de Inicio de Sesión](./images/21.PNG "Formulario para loguearse")
+![Formulario de Registro](./images/22.PNG "Formulario para registrarse")
+
+## Conceptos Clave del Episodio
+
+- **Rutas de Autenticación**: Define rutas GET y POST para registro e inicio de sesión, utilizando controladores dedicados.
+- **Componentes Reutilizables**: Crea componentes Blade para formularios, asegurando consistencia y mantenibilidad.
+- **Protección CSRF**: Usa la directiva `@csrf` en todos los formularios para garantizar seguridad.
+- **Diseño Responsive**: Implementa Tailwind CSS para una interfaz moderna y adaptable.
+- **Arquitectura MVC**: Separa la lógica en controladores, vistas y rutas para una estructura clara.
+
+## Beneficios de los Cambios Realizados
+
+1. **Consistencia Visual**: Los formularios de creación de trabajos, registro e inicio de sesión comparten el mismo diseño gracias a los componentes reutilizables.
+2. **Seguridad**: La protección CSRF asegura que las solicitudes sean legítimas.
+3. **Modularidad**: Los componentes y controladores facilitan futuras expansiones.
+4. **Escalabilidad**: La estructura MVC permite agregar más funcionalidades de autenticación fácilmente.
+5. **Experiencia de Usuario**: La interfaz es clara, moderna y responsiva.
+
+---
 
 _Documentación realizada por Guillermo Antonio Solórzano Ochoa - ISW811_

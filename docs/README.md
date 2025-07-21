@@ -30,6 +30,7 @@
 - [Episodio 20 - Starter Kits, Breeze, and Middleware](#episodio-20---starter-kits-breeze-and-middleware)
 - [Episodio 21 - Make a Login and Registration System From Scratch: Part 1](#episodio-21---make-a-login-and-registration-system-from-scratch-part-1)
 - [Episodio 22 - Make a Login and Registration System From Scratch: Part 2](#episodio-22---make-a-login-and-registration-system-from-scratch-part-2)
+- [Episodio 23 - 6 Steps to Authorization Mastery](#episodio-23---6-steps-to-authorization-mastery)
 
 ---
 # Unidad I - Baby Steps
@@ -4031,6 +4032,459 @@ El sistema de autenticación ahora incluye formularios de registro e inicio de s
 3. **Consistencia visual**: Los componentes reutilizables aseguran una interfaz uniforme.
 4. **Escalabilidad**: La estructura MVC y los controladores facilitan futuras mejoras, como autorización o restablecimiento de contraseñas.
 5. **Experiencia de usuario**: Formularios intuitivos y mensajes de error claros mejoran la interacción.
+
+# Episodio 23 - 6 Steps to Authorization Mastery
+
+## Introducción al Sistema de Autenticación Completo
+
+Este episodio se centra en la implementación de autorización usando Políticas (Policies) en Laravel para controlar qué usuarios pueden editar trabajos específicos. Nos enfocamos en proteger rutas, vistas y acciones en el controlador, asegurando que solo los propietarios de los trabajos puedan modificarlos. Utilizamos relaciones de modelos, middleware y una política personalizada para crear un sistema robusto y organizado.
+
+## Configuración de Rutas (web.php)
+
+Actualizamos el archivo `routes/web.php` para integrar middleware de autenticación y autorización en las rutas relacionadas con los trabajos.
+
+**Archivo:** `routes/web.php`
+
+```php
+<?php
+
+use App\Http\Controllers\JobController;
+use App\Http\Controllers\RegisteredUserController;
+use App\Http\Controllers\SessionController;
+use Illuminate\Support\Facades\Route;
+
+Route::view('/', 'home');
+Route::view('/contact', 'contact');
+
+// Rutas de Jobs
+Route::get('/jobs', [JobController::class, 'index']);
+Route::get('/jobs/create', [JobController::class, 'create']);
+Route::post('/jobs', [JobController::class, 'store'])->middleware('auth');
+Route::get('/jobs/{job}', [JobController::class, 'show']);
+
+// Ruta con middleware auth y autorización can
+Route::get('/jobs/{job}/edit', [JobController::class, 'edit'])
+    ->middleware('auth')
+    ->can('edit', 'job');
+
+Route::patch('/jobs/{job}', [JobController::class, 'update']);
+Route::delete('/jobs/{job}', [JobController::class, 'destroy']);
+
+// Rutas de autenticación
+Route::get('/register', [RegisteredUserController::class, 'create']);
+Route::post('/register', [RegisteredUserController::class, 'store']);
+
+Route::get('/login', [SessionController::class, 'create'])->name('login');
+Route::post('/login', [SessionController::class, 'store']);
+Route::post('/logout', [SessionController::class, 'destroy']);
+```
+
+**Características importantes:**
+- **Middleware `auth`**: Protege rutas que requieren autenticación.
+- **Método `can()`**: Verifica autorización usando políticas.
+- **Named route**: La ruta de login tiene nombre para redirecciones automáticas.
+
+## Vista de Job Individual (show.blade.php)
+
+Actualizamos la vista `show.blade.php` para mostrar un botón de edición solo a los usuarios autorizados, utilizando la directiva `@can`.
+
+**Archivo:** `resources/views/jobs/show.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Job
+    </x-slot:heading>
+
+    <h2 class="font-bold text-lg">{{ $job->title }}</h2>
+
+    <p>
+        This job pays {{ $job->salary }} per year.
+    </p>
+
+    @can('edit', $job)
+        <p class="mt-6">
+           <x-button href="/jobs/{{ $job->id }}/edit">Edit Job</x-button>
+        </p>
+    @endcan
+</x-layout>
+```
+
+**Funcionalidad:**
+- **Directiva `@can`**: Muestra el botón de edición solo si el usuario tiene permisos.
+- **Autorización condicional**: El botón "Edit Job" aparece únicamente para usuarios autorizados.
+
+## Proveedor de Servicios (AppServiceProvider.php)
+
+Modificamos `AppServiceProvider.php` para eliminar la definición de un Gate y priorizar el uso de una política personalizada.
+
+**Archivo:** `app/Providers/AppServiceProvider.php`
+
+```php
+<?php
+
+namespace App\Providers;
+
+use App\Models\Job;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        //
+    }
+
+    public function boot(): void
+    {
+        Model::preventLazyLoading();
+
+        // Gate comentado - se usa Policy en su lugar
+        // Gate::define('edit-job', function (User $user, Job $job) {
+        //     return $job->employer->user->is($user);
+        // });
+    }
+}
+```
+
+**Configuraciones:**
+- **`preventLazyLoading()`**: Previene lazy loading para mejor rendimiento.
+- **Gate comentado**: Se prefieren las Políticas sobre Gates para mejor organización.
+
+## Modelo Employer (Employer.php)
+
+Actualizamos el modelo `Employer` para definir relaciones con los modelos `User` y `Job`.
+
+**Archivo:** `app/Models/Employer.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Employer extends Model
+{
+    use HasFactory;
+
+    public function jobs()
+    {
+        return $this->hasMany(Job::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+}
+```
+
+**Relaciones:**
+- **`jobs()`**: Un employer tiene muchos jobs (One-to-Many).
+- **`user()`**: Un employer pertenece a un usuario (Many-to-One).
+
+## Migración de Employers
+
+A continuación, se muestra el código completo de la migración actualizada para la tabla `employers`, que incluye la clave foránea `user_id` para relacionarla con la tabla `users`.
+
+**Archivo:** `database/migrations/XXXX_XX_XX_XXXXXX_create_employers_table.php`
+
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('employers', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->foreignIdFor(\App\Models\User::class); // Clave foránea para relacionar con la tabla users
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('employers');
+    }
+};
+```
+
+**Notas sobre la migración:**
+- La línea `$table->foreignIdFor(\App\Models\User::class);` agrega la columna `user_id` como clave foránea que referencia la columna `id` de la tabla `users`.
+- Asegúrate de ejecutar `php artisan migrate` o `php artisan migrate:fresh --seed` después de actualizar este archivo para aplicar los cambios a la base de datos.
+
+## Factory de Employer (EmployerFactory.php)
+
+Configuramos el factory para generar datos de prueba para el modelo `Employer`.
+
+**Archivo:** `database/factories/EmployerFactory.php`
+
+```php
+<?php
+
+namespace Database\Factories;
+
+use App\Models\User;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+class EmployerFactory extends Factory
+{
+    public function definition(): array
+    {
+        return [
+            'name' => fake()->company(),
+            'user_id' => User::factory()
+        ];
+    }
+}
+```
+
+**Detalles:**
+- **`name`**: Genera un nombre de empresa aleatorio usando `fake()->company()`.
+- **`user_id`**: Asocia un usuario generado por `User::factory()` al empleador.
+- Permite poblar la base de datos con datos de prueba coherentes.
+
+## Controlador de Jobs (JobController.php)
+
+Actualizamos el controlador `JobController.php` para integrar autorización en los métodos de actualización y eliminación, además de optimizar consultas.
+
+**Archivo:** `app/Http/Controllers/JobController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Job;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
+
+class JobController extends Controller
+{
+    public function index()
+    {
+        $jobs = Job::with('employer')->latest()->simplePaginate(3);
+
+        return view('jobs.index', [
+            'jobs' => $jobs
+        ]);
+    }
+
+    public function create()
+    {
+        return view('jobs.create');
+    }
+
+    public function show(Job $job)
+    {
+        return view('jobs.show', ['job' => $job]);
+    }
+
+    public function store()
+    {
+        request()->validate([
+            'title' => ['required', 'min:3'],
+            'salary' => ['required']
+        ]);
+
+        Job::create([
+            'title' => request('title'),
+            'salary' => request('salary'),
+            'employer_id' => 1 // Valor temporal fijo
+        ]);
+
+        return redirect('/jobs');
+    }
+
+    public function edit(Job $job)
+    {
+        return view('jobs.edit', ['job' => $job]);
+    }
+
+    public function update(Job $job)
+    {
+        Gate::authorize('edit-job', $job);
+
+        request()->validate([
+            'title' => ['required', 'min:3'],
+            'salary' => ['required']
+        ]);
+
+        $job->update([
+            'title' => request('title'),
+            'salary' => request('salary'),
+        ]);
+
+        return redirect('/jobs/' . $job->id);
+    }
+
+    public function destroy(Job $job)
+    {
+        Gate::authorize('edit-job', $job);
+
+        $job->delete();
+
+        return redirect('/jobs');
+    }
+}
+```
+
+**Características:**
+- **Eager Loading**: `with('employer')` para optimizar consultas.
+- **Paginación simple**: `simplePaginate(3)`.
+- **Autorización manual**: `Gate::authorize()` en métodos de modificación.
+- **Validación**: Reglas consistentes para título y salario.
+
+## Política de Jobs (JobPolicy.php)
+
+Creamos una política para gestionar la autorización de acciones sobre los trabajos.
+
+**Archivo:** `app/Policies/JobPolicy.php`
+
+```php
+<?php
+
+namespace App\Policies;
+
+use App\Models\Job;
+use App\Models\User;
+use Illuminate\Auth\Access\Response;
+
+class JobPolicy
+{
+    public function edit(User $user, Job $job): bool
+    {
+        return $job->employer->user->is($user);
+    }
+}
+```
+
+**Lógica de autorización:**
+- **Método `edit()`**: Verifica si el usuario actual es el propietario del job.
+- **Comparación de identidad**: Usa `is()` para comparar instancias de User.
+- **Navegación de relaciones**: `$job->employer->user` accede al usuario propietario.
+
+## Comandos Artisan Ejecutados
+
+Ejecutamos los siguientes comandos en la terminal para configurar la base de datos y generar la política:
+
+```bash
+php artisan migrate:fresh --seed
+php artisan make:policy JobPolicy
+```
+
+**Propósito:**
+- **`migrate:fresh --seed`**: Recrea toda la base de datos con datos de prueba.
+- **`make:policy JobPolicy`**: Genera una nueva política para el modelo Job (nota: en Laravel 8+ no se pasa el modelo como argumento).
+
+## Flujo de Autorización
+
+1. **Verificación en Ruta**:
+   ```php
+   ->can('edit', 'job')
+   ```
+
+2. **Verificación en Vista**:
+   ```blade
+   @can('edit', $job)
+   ```
+
+3. **Verificación en Controlador**:
+   ```php
+   Gate::authorize('edit-job', $job);
+   ```
+
+## Relaciones de Base de Datos
+
+```
+User (1) ←→ (1) Employer (1) ←→ (Many) Job
+```
+
+- Un **Usuario** tiene un **Employer**.
+- Un **Employer** tiene muchos **Jobs**.
+- Solo el **Usuario propietario** puede editar sus **Jobs**.
+
+## Ventajas de las Políticas
+
+- **Organización**: Mantiene la lógica de autorización centralizada.
+- **Reutilización**: Puede usarse en rutas, vistas y controladores.
+- **Mantenimiento**: Fácil de modificar y extender.
+- **Claridad**: Código más limpio y expresivo.
+
+## Estructura de Archivos
+
+La estructura de archivos relevante incluye:
+
+```
+app/
+├── Http/Controllers/
+│   ├── JobController.php
+│   ├── RegisteredUserController.php
+│   ├── SessionController.php
+├── Models/
+│   ├── Employer.php
+│   ├── Job.php
+│   ├── User.php
+├── Policies/
+│   ├── JobPolicy.php
+├── Providers/
+│   ├── AppServiceProvider.php
+database/
+├── migrations/
+│   ├── XXXX_XX_XX_XXXXXX_create_employers_table.php
+├── factories/
+│   ├── EmployerFactory.php
+resources/views/
+├── jobs/
+│   ├── index.blade.php
+│   ├── create.blade.php
+│   ├── show.blade.php
+│   ├── edit.blade.php
+routes/
+└── web.php
+```
+
+## Resultado Visual
+
+- **Vista de un trabajo (`show.blade.php`)**: Muestra el título y salario del trabajo, con un botón "Edit Job" visible solo para el usuario propietario.
+- **Interfaz protegida**: Los usuarios no autorizados no ven el botón de edición ni pueden acceder a la ruta `/jobs/{job}/edit`.
+
+## Conceptos Clave del Episodio
+
+- **Políticas de autorización**: Uso de `JobPolicy` para definir reglas de acceso basadas en la propiedad.
+- **Middleware y `can`**: Restricción de rutas con autenticación y autorización.
+- **Directiva `@can`**: Control condicional en vistas para mostrar elementos según permisos.
+- **Relaciones de modelos**: Uso de `User`, `Employer` y `Job` para verificar la propiedad.
+- **Optimización**: Eager loading y paginación simple para mejorar el rendimiento.
+- **Seguridad**: Autorización en múltiples niveles (rutas, vistas, controladores).
+
+## Beneficios de los Cambios Realizados
+
+1. **Autorización robusta**: Solo los usuarios propietarios pueden editar o eliminar trabajos.
+2. **Código organizado**: Las políticas centralizan la lógica de autorización, reemplazando Gates.
+3. **Escalabilidad**: La estructura permite agregar más reglas de autorización fácilmente.
+4. **Seguridad mejorada**: Múltiples capas de verificación protegen los recursos.
+5. **Experiencia de usuario**: Interfaz clara y consistente, con acceso restringido según permisos.
 
 ---
 

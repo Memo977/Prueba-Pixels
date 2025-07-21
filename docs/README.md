@@ -24,6 +24,7 @@
 - [Episodio 16 - Forms and CSRF](#episodio-16---forms-and-csrf)
 - [Episodio 17 - Always Validate. Never Trust the User](#episodio-17---always-validate-never-trust-the-user)
 - [Episodio 18 - Editing, Updating, and Deleting a Resource](#episodio-18---editing-updating-and-deleting-a-resource)
+- [Episodio 19 - Routes Reloaded - 6 Essential Tips](#episodio-19---routes-reloaded---6-essential-tips)
 
 ---
 # Unidad I - Baby Steps
@@ -2659,6 +2660,8 @@ Edita el archivo `button.blade.php` en `resources/views/components/` para quitar
 **Detalles del componente:**
 - Elimina `ml-3` del atributo `class` para ajustar el espaciado del botón según el contexto.
 
+![Imagen del Episodio 18](./images/19.PNG "Editar, Eliminar y Actualizar")
+
 ### Conceptos clave del episodio
 
 - **Rutas CRUD**: Implementa rutas para editar, actualizar y eliminar recursos.
@@ -2674,5 +2677,151 @@ Edita el archivo `button.blade.php` en `resources/views/components/` para quitar
 3. **Experiencia de usuario**: Botones claros y formularios intuitivos mejoran la interacción.
 4. **Modularidad**: El componente de botón adaptado facilita su uso en diferentes contextos.
 5. **Escalabilidad**: La estructura soporta futuras mejoras, como la autorización pendiente.
+
+## Episodio 19 - Routes Reloaded - 6 Essential Tips
+
+### Introducción a la Reorganización de Rutas
+
+En este episodio, reorganizamos la gestión de rutas introduciendo un controlador `JobController` para centralizar la lógica de la aplicación. Además, exploramos seis consejos esenciales para optimizar y estructurar las rutas de manera efectiva, mejorando la escalabilidad y el mantenimiento del proyecto.
+
+### Creación del Controlador `JobController`
+
+Crea un nuevo archivo `JobController.php` en `app/Http/Controllers/` para manejar las operaciones relacionadas con los trabajos.
+
+**Archivo:** `app/Http/Controllers/JobController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Job;
+use Illuminate\Http\Request;
+
+class JobController extends Controller
+{
+    public function index()
+    {
+        $jobs = Job::with('employer')->latest()->simplePaginate(3);
+
+        return view('jobs.index', [
+            'jobs' => $jobs
+        ]);
+    }
+
+    public function create()
+    {
+        return view('jobs.create');
+    }
+
+    public function show(Job $job)
+    {
+        return view('jobs.show', ['job' => $job]);
+    }
+
+    public function store()
+    {
+        request()->validate([
+            'title' => ['required', 'min:3'],
+            'salary' => ['required']
+        ]);
+
+        Job::create([
+            'title' => request('title'),
+            'salary' => request('salary'),
+            'employer_id' => 1
+        ]);
+
+        return redirect('/jobs');
+    }
+
+    public function edit(Job $job)
+    {
+        return view('jobs.edit', ['job' => $job]);
+    }
+
+    public function update(Job $job)
+    {
+        // authorize (On hold...)
+
+        request()->validate([
+            'title' => ['required', 'min:3'],
+            'salary' => ['required']
+        ]);
+
+        $job->update([
+            'title' => request('title'),
+            'salary' => request('salary'),
+        ]);
+
+        return redirect('/jobs/' . $job->id);
+    }
+
+    public function destroy(Job $job)
+    {
+        // authorize (On hold...)
+
+        $job->delete();
+
+        return redirect('/jobs');
+    }
+}
+```
+
+**Detalles del controlador:**
+- **Método `index`**: Lista los trabajos con eager loading de `employer`, ordenados por fecha descendente y paginados con 3 elementos.
+- **Método `create`**: Muestra el formulario de creación.
+- **Método `show`**: Muestra los detalles de un trabajo específico.
+- **Método `store`**: Valida y crea un nuevo trabajo con `employer_id` fijo en 1.
+- **Método `edit`**: Muestra el formulario de edición.
+- **Método `update`**: Valida y actualiza un trabajo existente.
+- **Método `destroy`**: Elimina un trabajo.
+- **Nota**: La autorización sigue pendiente.
+
+### Modificación de las rutas en `web.php`
+
+Actualiza el archivo `routes/web.php` para utilizar el controlador recién creado.
+
+**Archivo:** `routes/web.php`
+
+```php
+<?php
+use App\Http\Controllers\JobController;
+use Illuminate\Support\Facades\Route;
+
+Route::view('/', 'home');
+Route::view('/contact', 'contact');
+Route::resource('jobs', JobController::class);
+```
+
+**Detalles de las rutas:**
+- **`Route::resource('jobs', JobController::class)`**: Define todas las rutas CRUD (index, create, store, show, edit, update, destroy) para el recurso `jobs`.
+
+### Seis Consejos Esenciales para Rutas
+1. **Usa Controladores**: Centraliza la lógica en controladores para mantener las rutas limpias y escalables.
+2. **Eager Loading**: Aplica `with('employer')` para evitar problemas de lazy loading y mejorar el rendimiento.
+3. **Paginación Inteligente**: Implementa `simplePaginate()` para manejar grandes listas de datos eficientemente.
+4. **Validación en Controladores**: Realiza la validación dentro de los métodos del controlador para mantener la consistencia.
+5. **Inyección de Dependencias**: Usa `Job $job` para simplificar el manejo de modelos en las acciones.
+6. **Redirecciones Consistentes**: Mantén un flujo lógico con redirecciones a URLs o rutas nombradas según el contexto.
+
+### Resultado visual
+- La lista de trabajos en `jobs/index.blade.php` ahora muestra los empleadores y está paginada.
+- Los formularios en `jobs/create.blade.php` y `jobs/edit.blade.php` funcionan con las nuevas rutas generadas.
+
+![Imagen del Episodio 19](./images/20.PNG "Se muestran los empleados, junto a los trabajos")
+
+### Conceptos clave del episodio
+- **Controladores**: Mejoran la organización al separar la lógica de las rutas.
+- **Eager Loading**: Evita errores de carga diferida con `with()`.
+- **Paginación**: Facilita la navegación con `simplePaginate()`.
+- **Rutas de Recursos**: `Route::resource()` simplifica la definición de rutas CRUD.
+
+### Beneficios de los cambios realizados
+1. **Escalabilidad**: Los controladores preparan el código para futuras expansiones.
+2. **Rendimiento**: El eager loading y la paginación optimizan las consultas.
+3. **Mantenimiento**: La lógica centralizada facilita las actualizaciones.
+4. **Consistencia**: Las rutas y validaciones están estandarizadas.
+5. **Usabilidad**: La paginación mejora la experiencia del usuario.
 
 _Documentación realizada por Guillermo Antonio Solórzano Ochoa - ISW811_

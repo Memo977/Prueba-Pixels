@@ -29,6 +29,7 @@
 ## Unidad IV - Authentication
 - [Episodio 20 - Starter Kits, Breeze, and Middleware](#episodio-20---starter-kits-breeze-and-middleware)
 - [Episodio 21 - Make a Login and Registration System From Scratch: Part 1](#episodio-21---make-a-login-and-registration-system-from-scratch-part-1)
+- [Episodio 22 - Make a Login and Registration System From Scratch: Part 2](#episodio-22---make-a-login-and-registration-system-from-scratch-part-2)
 
 ---
 # Unidad I - Baby Steps
@@ -3521,6 +3522,515 @@ Los formularios de registro e inicio de sesión se ven modernos y consistentes g
 3. **Modularidad**: Los componentes y controladores facilitan futuras expansiones.
 4. **Escalabilidad**: La estructura MVC permite agregar más funcionalidades de autenticación fácilmente.
 5. **Experiencia de Usuario**: La interfaz es clara, moderna y responsiva.
+
+# Episodio 22 - Make a Login and Registration System From Scratch: Part 2
+
+## Introducción al Sistema de Autenticación Completo
+
+En este episodio, completamos la implementación del sistema de autenticación personalizado iniciado en el Episodio 21. Nos enfocamos en agregar la funcionalidad de cierre de sesión, implementar la lógica de validación y autenticación en los controladores, y mejorar la interfaz de usuario con componentes Blade reutilizables. Este sistema incluye registro, inicio de sesión y cierre de sesión, utilizando Laravel y Tailwind CSS para una experiencia moderna y segura.
+
+## Modificando el Archivo de Rutas
+
+Actualizamos el archivo `routes/web.php` para incluir la ruta de cierre de sesión, complementando las rutas de registro e inicio de sesión definidas previamente.
+
+**Archivo:** `routes/web.php`
+
+```php
+<?php
+
+use App\Http\Controllers\JobController;
+use App\Http\Controllers\RegisteredUserController;
+use App\Http\Controllers\SessionController;
+use Illuminate\Support\Facades\Route;
+
+Route::view('/', 'home');
+Route::view('/contact', 'contact');
+
+Route::resource('jobs', JobController::class);
+
+// Auth
+Route::get('/register', [RegisteredUserController::class, 'create']);
+Route::post('/register', [RegisteredUserController::class, 'store']);
+Route::get('/login', [SessionController::class, 'create']);
+Route::post('/login', [SessionController::class, 'store']);
+Route::post('/logout', [SessionController::class, 'destroy']);
+```
+
+**Detalles de las rutas:**
+- **`Route::post('/logout', ...)`**: Procesa la acción de cierre de sesión, manejada por el método `destroy` del controlador `SessionController`.
+- Las rutas de registro (`/register`) y login (`/login`) permanecen sin cambios desde el Episodio 21.
+- **Controladores**: `RegisteredUserController` para registro, `SessionController` para inicio y cierre de sesión.
+
+## Actualizando el Layout Principal
+
+Modificamos `resources/views/components/layout.blade.php` para incluir un formulario de cierre de sesión que aparece solo para usuarios autenticados, utilizando las directivas `@auth` y `@guest` de Blade.
+
+**Archivo:** `resources/views/components/layout.blade.php`
+
+```blade
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Website</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="h-full">
+<div class="min-h-full">
+    <nav class="bg-gray-800">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="flex h-16 items-center justify-between">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <img class="h-8 w-8" src="https://laracasts.com/images/logo/logo-triangle.svg"
+                             alt="Your Company">
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-10 flex items-baseline space-x-4">
+                            <x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+                            <x-nav-link href="/jobs" :active="request()->is('jobs')">Jobs</x-nav-link>
+                            <x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+                        </div>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-4 flex items-center md:ml-6">
+                        @guest
+                            <x-nav-link href="/login" :active="request()->is('login')">Log In</x-nav-link>
+                            <x-nav-link href="/register" :active="request()->is('register')">Register</x-nav-link>
+                        @endguest
+                        @auth
+                            <form method="POST" action="/logout">
+                                @csrf
+                                <x-form-button>Log Out</x-form-button>
+                            </form>
+                        @endauth
+                    </div>
+                </div>
+                <div class="-mr-2 flex md:hidden">
+                    <button type="button"
+                            class="relative inline-flex items-center justify-center rounded-md bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800"
+                            aria-controls="mobile-menu" aria-expanded="false">
+                        <span class="absolute -inset-0.5"></span>
+                        <span class="sr-only">Open main menu</span>
+                        <svg class="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                             stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+                        </svg>
+                        <svg class="hidden h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                             stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="md:hidden" id="mobile-menu">
+            <div class="space-y-1 px-2 pb-3 pt-2 sm:px-3">
+                <x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+                <x-nav-link href="/jobs" :active="request()->is('jobs')">Jobs</x-nav-link>
+                <x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+            </div>
+            <div class="border-t border-gray-700 pb-3 pt-4">
+                <div class="flex items-center px-5">
+                    <div class="flex-shrink-0">
+                        <img class="h-10 w-10 rounded-full" src="https://laracasts.com/images/lary-ai-face.svg"
+                             alt="">
+                    </div>
+                    <div class="ml-3">
+                        <div class="text-base font-medium leading-none text-white">Lary Robot</div>
+                        <div class="text-sm font-medium leading-none text-gray-400">jeffrey@laracasts.com</div>
+                    </div>
+                    <button type="button"
+                            class="relative ml-auto flex-shrink-0 rounded-full bg-gray-800 p-1 text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800">
+                        <span class="absolute -inset-1.5"></span>
+                        <span class="sr-only">View notifications</span>
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                             stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733 .64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <header class="bg-white shadow">
+        <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 sm:flex sm:justify-between">
+            <h1 class="text-3xl font-bold tracking-tight text-gray-900">{{ $heading }}</h1>
+            <x-button href="/jobs/create">Create Job</x-button>
+        </div>
+    </header>
+    <main>
+        <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+            {{ $slot }}
+        </div>
+    </main>
+</div>
+</body>
+</html>
+```
+
+**Detalles del layout:**
+- **Directiva `@auth`**: Muestra un formulario de cierre de sesión con un botón "Log Out" para usuarios autenticados.
+- **Directiva `@guest`**: Muestra enlaces "Log In" y "Register" para usuarios no autenticados.
+- **Protección CSRF**: Incluye `@csrf` en el formulario de logout para seguridad.
+- **Diseño responsivo**: Mantiene la navegación adaptativa con Tailwind CSS.
+
+## Actualizando las Vistas de Autenticación
+
+Actualizamos las vistas de registro e inicio de sesión para usar los componentes reutilizables creados en el Episodio 21, asegurando consistencia y agregando mejoras como la preservación de datos en caso de errores de validación.
+
+### Formulario de Inicio de Sesión - `login.blade.php`
+
+**Archivo:** `resources/views/auth/login.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Log In
+    </x-slot:heading>
+    <form method="POST" action="/login">
+        @csrf
+        <div class="space-y-12">
+            <div class="border-b border-gray-900/10 pb-12">
+                <div class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                    <x-form-field>
+                        <x-form-label for="email">Email</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="email" id="email" type="email" :value="old('email')" required />
+                            <x-form-error name="email" />
+                        </div>
+                    </x-form-field>
+                    <x-form-field>
+                        <x-form-label for="password">Password</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="password" id="password" type="password" required />
+                            <x-form-error name="password" />
+                        </div>
+                    </x-form-field>
+                </div>
+            </div>
+        </div>
+        <div class="mt-6 flex items-center justify-end gap-x-6">
+            <a href="/" class="text-sm font-semibold leading-6 text-gray-900">Cancel</a>
+            <x-form-button>Log In</x-form-button>
+        </div>
+    </form>
+</x-layout>
+```
+
+**Detalles:**
+- **Preservación de datos**: Usa `:value="old('email')"` para mantener el valor del email en caso de errores de validación.
+- **Componentes reutilizables**: Utiliza `x-form-field`, `x-form-label`, `x-form-input`, `x-form-error`, y `x-form-button`.
+- **Seguridad**: Incluye `@csrf` para protección contra ataques CSRF.
+
+### Formulario de Registro - `register.blade.php`
+
+**Archivo:** `resources/views/auth/register.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Register
+    </x-slot:heading>
+    <form method="POST" action="/register">
+        @csrf
+        <div class="space-y-12">
+            <div class="border-b border-gray-900/10 pb-12">
+                <div class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                    <x-form-field>
+                        <x-form-label for="first_name">First Name</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="first_name" id="first_name" required />
+                            <x-form-error name="first_name" />
+                        </div>
+                    </x-form-field>
+                    <x-form-field>
+                        <x-form-label for="last_name">Last Name</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="last_name" id="last_name" required />
+                            <x-form-error name="last_name" />
+                        </div>
+                    </x-form-field>
+                    <x-form-field>
+                        <x-form-label for="email">Email</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="email" id="email" type="email" required />
+                            <x-form-error name="email" />
+                        </div>
+                    </x-form-field>
+                    <x-form-field>
+                        <x-form-label for="password">Password</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="password" id="password" type="password" required />
+                            <x-form-error name="password" />
+                        </div>
+                    </x-form-field>
+                    <x-form-field>
+                        <x-form-label for="password_confirmation">Confirm Password</x-form-label>
+                        <div class="mt-2">
+                            <x-form-input name="password_confirmation" id="password_confirmation" type="password" required />
+                            <x-form-error name="password_confirmation" />
+                        </div>
+                    </x-form-field>
+                </div>
+            </div>
+        </div>
+        <div class="mt-6 flex items-center justify-end gap-x-6">
+            <a href="/" class="text-sm font-semibold leading-6 text-gray-900">Cancel</a>
+            <x-form-button>Register</x-form-button>
+        </div>
+    </form>
+</x-layout>
+```
+
+**Detalles:**
+- Incluye campos para `first_name`, `last_name`, `email`, `password`, y `password_confirmation`.
+- Usa componentes reutilizables para mantener consistencia con el formulario de login.
+- **Seguridad**: Incluye `@csrf` para protección contra ataques CSRF.
+
+## Configurando el Modelo de Usuario
+
+Modificamos el modelo `User.php` para habilitar la asignación masiva, ocultar campos sensibles y configurar el hash automático de contraseñas.
+
+**Archivo:** `app/Models/User.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+
+class User extends Authenticatable
+{
+    use HasFactory, Notifiable;
+
+    protected $guarded = [];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
+    }
+}
+```
+
+**Detalles:**
+- **Asignación masiva**: Usa `$guarded = []` para permitir la asignación de todos los campos.
+- **Campos ocultos**: Oculta `password` y `remember_token` en serializaciones.
+- **Casts**: Configura `email_verified_at` como tipo `datetime` y `password` como `hashed` para hash automático.
+- **Traits**: Incluye `HasFactory` para factories y `Notifiable` para notificaciones.
+
+## Implementando los Controladores de Autenticación
+
+Actualizamos los controladores `SessionController` y `RegisteredUserController` para implementar la lógica completa de autenticación, incluyendo validación, creación de usuarios, inicio de sesión automático y regeneración de sesiones.
+
+### `SessionController.php`
+
+**Archivo:** `app/Http/Controllers/SessionController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
+
+class SessionController extends Controller
+{
+    public function create()
+    {
+        return view('auth.login');
+    }
+
+    public function store()
+    {
+        $attributes = request()->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required']
+        ]);
+
+        if (! Auth::attempt($attributes)) {
+            throw ValidationException::withMessages([
+                'email' => 'Sorry, those credentials do not match.'
+            ]);
+        }
+
+        request()->session()->regenerate();
+
+        return redirect('/jobs');
+    }
+
+    public function destroy()
+    {
+        Auth::logout();
+
+        return redirect('/');
+    }
+}
+```
+
+**Detalles:**
+- **Método `create`**: Retorna la vista del formulario de inicio de sesión.
+- **Método `store`**:
+  - Valida que `email` sea un correo válido y que `password` esté presente.
+  - Usa `Auth::attempt()` para autenticar al usuario.
+  - Lanza una excepción `ValidationException` si las credenciales no coinciden.
+  - Regenera la sesión con `session()->regenerate()` para prevenir ataques de fijación de sesión.
+  - Redirige a `/jobs` tras un login exitoso.
+- **Método `destroy`**:
+  - Usa `Auth::logout()` para cerrar la sesión.
+  - Redirige a la página principal (`/`).
+
+### `RegisteredUserController.php`
+
+**Archivo:** `app/Http/Controllers/RegisteredUserController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rules\Password;
+
+class RegisteredUserController extends Controller
+{
+    public function create()
+    {
+        return view('auth.register');
+    }
+
+    public function store()
+    {
+        $attributes = request()->validate([
+            'first_name' => ['required'],
+            'last_name'  => ['required'],
+            'email'      => ['required', 'email'],
+            'password'   => ['required', Password::min(6), 'confirmed']
+        ]);
+
+        $user = User::create($attributes);
+
+        Auth::login($user);
+
+        return redirect('/jobs');
+    }
+}
+```
+
+**Detalles:**
+- **Método `create`**: Retorna la vista del formulario de registro.
+- **Método `store`**:
+  - Valida `first_name`, `last_name`, `email` (correo válido), y `password` (mínimo 6 caracteres, confirmado).
+  - Crea un nuevo usuario con `User::create()`.
+  - Inicia sesión automáticamente con `Auth::login()`.
+  - Redirige a `/jobs`.
+
+## Flujo de Autenticación
+
+1. **Registro de nuevo usuario**:
+   - El usuario completa el formulario en `/register`.
+   - Los datos se validan en `RegisteredUserController@store`.
+   - Se crea el usuario con contraseña hasheada automáticamente.
+   - Se inicia sesión automáticamente y se redirige a `/jobs`.
+
+2. **Inicio de sesión**:
+   - El usuario completa el formulario en `/login`.
+   - Los datos se validan en `SessionController@store`.
+   - Se verifica la autenticación con `Auth::attempt()`.
+   - La sesión se regenera para mayor seguridad.
+   - Se redirige a `/jobs`.
+
+3. **Cierre de sesión**:
+   - El usuario envía el formulario de logout desde el layout.
+   - `SessionController@destroy` cierra la sesión con `Auth::logout()`.
+   - Se redirige a la página principal (`/`).
+
+## Características de Seguridad
+
+- **Hashing automático**: Las contraseñas se hashean automáticamente gracias al cast `'password' => 'hashed'` en el modelo `User`.
+- **Regeneración de sesión**: `session()->regenerate()` en el login previene ataques de fijación de sesión.
+- **Validación de confirmación**: La regla `'confirmed'` asegura que la contraseña y su confirmación coincidan.
+- **Protección CSRF**: Todos los formularios incluyen `@csrf` para prevenir ataques de falsificación de solicitudes.
+- **Campos ocultos**: `password` y `remember_token` no se exponen en serializaciones.
+
+## Estructura de Archivos
+
+La estructura de archivos actualizada incluye:
+
+```
+app/
+├── Http/Controllers/
+│   ├── JobController.php
+│   ├── RegisteredUserController.php
+│   ├── SessionController.php
+├── Models/
+│   ├── User.php
+│   ├── Job.php
+│   ├── Employer.php
+│   ├── Tag.php
+resources/views/
+├── auth/
+│   ├── login.blade.php
+│   ├── register.blade.php
+├── components/
+│   ├── button.blade.php
+│   ├── form-button.blade.php
+│   ├── form-error.blade.php
+│   ├── form-field.blade.php
+│   ├── form-input.blade.php
+│   ├── form-label.blade.php
+│   ├── layout.blade.php
+│   ├── nav-link.blade.php
+├── jobs/
+│   ├── create.blade.php
+│   ├── edit.blade.php
+│   ├── index.blade.php
+│   ├── show.blade.php
+├── contact.blade.php
+├── home.blade.php
+routes/
+└── web.php
+```
+
+## Resultado Visual
+
+El sistema de autenticación ahora incluye formularios de registro e inicio de sesión completamente funcionales, con un botón de logout visible para usuarios autenticados. La interfaz es moderna, responsiva y consistente gracias a Tailwind CSS y los componentes Blade reutilizables.
+
+![Botón de Logout en la Navegación](./images/23.PNG "Botón de cierre de sesión")
+
+## Conceptos Clave del Episodio
+
+- **Autenticación completa**: Implementa registro, login y logout con lógica robusta.
+- **Validación avanzada**: Usa reglas de validación como `Password::min(6)` y `'confirmed'` para contraseñas.
+- **Seguridad**: Incluye hashing de contraseñas, regeneración de sesiones y protección CSRF.
+- **Componentes Blade**: Reutiliza componentes para formularios, asegurando consistencia visual.
+- **Flujo de usuario**: Proporciona una experiencia fluida con redirecciones lógicas tras cada acción.
+
+## Beneficios de los Cambios Realizados
+
+1. **Funcionalidad completa**: El sistema de autenticación permite registrar, iniciar y cerrar sesión de manera segura.
+2. **Seguridad robusta**: Las características como hashing, regeneración de sesiones y CSRF protegen la aplicación.
+3. **Consistencia visual**: Los componentes reutilizables aseguran una interfaz uniforme.
+4. **Escalabilidad**: La estructura MVC y los controladores facilitan futuras mejoras, como autorización o restablecimiento de contraseñas.
+5. **Experiencia de usuario**: Formularios intuitivos y mensajes de error claros mejoran la interacción.
 
 ---
 

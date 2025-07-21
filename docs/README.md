@@ -22,6 +22,7 @@
 
 ## Unidad III - Forms and Validation
 - [Episodio 16 - Forms and CSRF](#episodio-16---forms-and-csrf)
+- [Episodio 17 - Always Validate. Never Trust the User](#episodio-17---always-validate-never-trust-the-user)
 
 ---
 # Unidad I - Baby Steps
@@ -2176,5 +2177,297 @@ Laravel proporciona protección automática contra ataques CSRF. La directiva `@
 5. **Experiencia de usuario**: El formulario utiliza Tailwind CSS para ofrecer un diseño profesional y consistente.
 
 ![Imagen del Episodio 16](./images/17.PNG "Vista del formulario para crear un trabajo")
+
+## Episodio 17 - Always Validate. Never Trust the User
+
+### Introducción a la Validación en Laravel
+
+En este episodio, aprendemos la importancia de validar siempre los datos enviados por los usuarios antes de procesarlos, siguiendo el principio de "Never Trust the User". Modificamos la ruta POST de trabajos y la vista del formulario para incluir validación básica y mostrar errores al usuario.
+
+### Modificando la ruta POST de trabajos
+
+Edita el archivo `routes/web.php` para agregar validación a la ruta POST `/jobs`.
+
+**Archivo:** `routes/web.php`
+
+```php
+Route::post('/jobs', function () {
+    // validation...
+    request()->validate([
+        'title' => ['required', 'min:3'],
+        'salary' => ['required']
+    ]);
+
+    Job::create([
+        'title' => request('title'),
+        'salary' => request('salary'),
+        'employer_id' => 1
+    ]);
+
+    return redirect('/jobs');
+});
+```
+
+**Detalles de la validación:**
+- **`title`**: Requiere que el campo sea obligatorio (`required`) y tenga al menos 3 caracteres (`min:3`).
+- **`salary`**: Requiere que el campo sea obligatorio (`required`).
+- Si la validación falla, Laravel automáticamente redirige al formulario con los errores correspondientes.
+
+### Modificando la vista create.blade.php
+
+Edita la vista `create.blade.php` ubicada en `resources/views/jobs/` para mostrar los errores de validación y marcar los campos como obligatorios.
+
+**Archivo:** `resources/views/jobs/create.blade.php`
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Create Job
+    </x-slot:heading>
+
+    <form method="POST" action="/jobs">
+        @csrf
+
+        <div class="space-y-12">
+            <div class="border-b border-gray-900/10 pb-12">
+                <h2 class="text-base font-semibold leading-7 text-gray-900">Create a New Job</h2>
+                <p class="mt-1 text-sm leading-6 text-gray-600">We just need a handful of details from you.</p>
+
+                <div class="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                    <div class="sm:col-span-4">
+                        <label for="title" class="block text-sm font-medium leading-6 text-gray-900">Title</label>
+                        <div class="mt-2">
+                            <div
+                                class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
+                                <input type="text" name="title" id="title"
+                                    class="block flex-1 border-0 bg-transparent py-1.5 px-3 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm sm:leading-6"
+                                    placeholder="Shift Leader" required>
+                            </div>
+
+                            @error('title')
+                            <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-4">
+                        <label for="salary" class="block text-sm font-medium leading-6 text-gray-900">Salary</label>
+                        <div class="mt-2">
+                            <div
+                                class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
+                                <input type="text" name="salary" id="salary"
+                                    class="block flex-1 border-0 bg-transparent py-1.5 px-3 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm sm:leading-6"
+                                    placeholder="$50,000 Per Year" required>
+                            </div>
+
+                            @error('salary')
+                            <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Método alternativo para mostrar errores (comentado) -->
+                <!-- 
+                <div class="mt-10">
+                    @if($errors->any())
+                        <ul>
+                            @foreach($errors->all() as $error)
+                                <li class="text-red-500 italic">{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </div>
+                -->
+            </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-end gap-x-6">
+            <button type="button" class="text-sm font-semibold leading-6 text-gray-900">Cancel</button>
+            <button type="submit"
+                class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Save</button>
+        </div>
+    </form>
+</x-layout>
+```
+
+**Detalles de la vista:**
+- **`required`**: Agrega el atributo `required` a los campos `title` y `salary` para indicar que son obligatorios en el cliente.
+- **`@error`**: Muestra mensajes de error personalizados debajo de cada campo si la validación falla, utilizando Tailwind CSS para estilizar los mensajes en rojo.
+- **Método alternativo comentado**: Incluye un ejemplo alternativo para mostrar todos los errores en una lista, aunque se prefiere el enfoque por campo para una mejor experiencia de usuario.
+
+### Modificando el layout para incluir el botón "Create Job"
+
+Edita el archivo `layout.blade.php` en `resources/views/components/` para agregar un botón que redirija a la vista de creación de trabajos.
+
+**Archivo:** `resources/views/components/layout.blade.php`
+
+```blade
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-100">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Website</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="h-full">
+    <div class="min-h-full">
+        <nav class="bg-gray-800">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <img class="h-8 w-8" src="https://assets.laracasts.com/images/primary-logo-symbol.svg"
+                                alt="Your Company">
+                        </div>
+                        <div class="hidden md:block">
+                            <div class="ml-10 flex items-baseline space-x-4">
+                                <!-- Current: "bg-gray-900 text-white", Default: "text-gray-300 hover:bg-gray-700 hover:text-white" -->
+                                <x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+                                <x-nav-link href="/jobs" :active="request()->is('jobs')">Jobs</x-nav-link>
+                                <x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-4 flex items-center md:ml-6">
+                            <button type="button"
+                                class="relative rounded-full bg-gray-800 p-1 text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800">
+                                <span class="absolute -inset-1.5"></span>
+                                <span class="sr-only">View notifications</span>
+                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                    stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                                </svg>
+                            </button>
+
+                            <!-- Profile dropdown -->
+                            <div class="relative ml-3">
+                                <div>
+                                    <button type="button"
+                                        class="relative flex max-w-xs items-center rounded-full bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800"
+                                        id="user-menu-button" aria-expanded="false" aria-haspopup="true">
+                                        <span class="absolute -inset-1.5"></span>
+                                        <span class="sr-only">Open user menu</span>
+                                        <img class="h-8 w-8 rounded-full"
+                                            src="https://laracasts.com/images/forum/lary-ai-avatar.svg?v=2" alt="">
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="-mr-2 flex md:hidden">
+                        <!-- Mobile menu button -->
+                        <button type="button"
+                            class="relative inline-flex items-center justify-center rounded-md bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800"
+                            aria-controls="mobile-menu" aria-expanded="false">
+                            <span class="absolute -inset-0.5"></span>
+                            <span class="sr-only">Open main menu</span>
+                            <!-- Menu open: "hidden", Menu closed: "block" -->
+                            <svg class="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                            </svg>
+                            <!-- Menu open: "block", Menu closed: "hidden" -->
+                            <svg class="hidden h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile menu, show/hide based on menu state. -->
+            <div class="md:hidden" id="mobile-menu">
+                <div class="space-y-1 px-2 pb-3 pt-2 sm:px-3">
+                    <!-- Current: "bg-gray-900 text-white", Default: "text-gray-300 hover:bg-gray-700 hover:text-white" -->
+                    <x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+                    <x-nav-link href="/jobs" :active="request()->is('jobs')">Jobs</x-nav-link>
+                    <x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+                </div>
+                <div class="border-t border-gray-700 pb-3 pt-4">
+                    <div class="flex items-center px-5">
+                        <div class="flex-shrink-0">
+                            <img class="h-10 w-10 rounded-full" src="https://laracasts.com/images/lary-ai-face.svg"
+                                alt="">
+                        </div>
+                        <div class="ml-3">
+                            <div class="text-base font-medium leading-none text-white">Lary Robot</div>
+                            <div class="text-sm font-medium leading-none text-gray-400">jeffrey@laracasts.com</div>
+                        </div>
+                        <button type="button"
+                            class="relative ml-auto flex-shrink-0 rounded-full bg-gray-800 p-1 text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800">
+                            <span class="absolute -inset-1.5"></span>
+                            <span class="sr-only">View notifications</span>
+                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <header class="bg-white shadow">
+            <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 sm:flex sm:justify-between">
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">{{ $heading }}</h1>
+                <x-button href="/jobs/create">Create Job</x-button>
+            </div>
+        </header>
+
+        <main>
+            <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                {{ $slot }}
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>
+```
+
+### Creando el componente button.blade.php
+
+Crea un nuevo componente `button.blade.php` en `resources/views/components/` para estilizar el botón de manera reusable.
+
+**Archivo:** `resources/views/components/button.blade.php`
+
+```blade
+<a {{ $attributes->merge(['class' => 'relative inline-flex items-center px-4 py-2 ml-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 leading-5 rounded-md hover:text-gray-500 focus:outline-none focus:ring ring-gray-300 focus:border-blue-300 active:bg-gray-100 active:text-gray-700 transition ease-in-out duration-150 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:focus:border-blue-700 dark:active:bg-gray-700 dark:active:text-gray-300']) }}>{{ $slot }}</a>
+```
+
+**Detalles del componente:**
+- Utiliza `$attributes->merge()` para combinar clases personalizadas con estilos predeterminados de Tailwind CSS.
+- El componente es adaptable a temas claro y oscuro, con transiciones suaves para mejorar la experiencia de usuario.
+
+### Resultado visual
+
+El botón "Create Job" aparece en la página de trabajos, y el formulario requiere que se llenen los campos `title` y `salary` para evitar errores de validación.
+
+![Imagen del Episodio 17](./images/18.PNG "Existencia del botón crear trabajo en Jobs y el requerimiento de llenar campos")
+
+### Conceptos clave del episodio
+
+- **Validación de datos**: Usa `request()->validate()` para asegurar que los datos cumplan con las reglas definidas.
+- **Errores en formularios**: Implementa `@error` para mostrar mensajes de validación debajo de cada campo.
+- **Seguridad**: Nunca confíes en los datos del usuario sin validarlos primero.
+- **Componentes reutilizables**: Crea componentes como `button.blade.php` para mantener consistencia en el diseño.
+- **Experiencia de usuario**: Mejora la interfaz con botones y validaciones visibles.
+
+### Beneficios de los cambios realizados
+
+1. **Seguridad mejorada**: La validación previene la inserción de datos inválidos en la base de datos.
+2. **Feedback al usuario**: Los mensajes de error guían al usuario para corregir los campos.
+3. **Consistencia visual**: El componente de botón mejora la apariencia y reusabilidad en toda la aplicación.
+4. **Accesibilidad**: El botón "Create Job" facilita la creación de nuevos trabajos desde la vista principal.
+5. **Mantenibilidad**: La estructura modular permite ajustes futuros sin afectar otras partes del código.
 
 _Documentación realizada por Guillermo Antonio Solórzano Ochoa - ISW811_

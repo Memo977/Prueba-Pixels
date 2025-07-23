@@ -31,7 +31,10 @@
 - [Episodio 21 - Make a Login and Registration System From Scratch: Part 1](#episodio-21---make-a-login-and-registration-system-from-scratch-part-1)
 - [Episodio 22 - Make a Login and Registration System From Scratch: Part 2](#episodio-22---make-a-login-and-registration-system-from-scratch-part-2)
 - [Episodio 23 - 6 Steps to Authorization Mastery](#episodio-23---6-steps-to-authorization-mastery)
+
+## Unidad V - Digging Deeper
 - [Episodio 24 - How to Preview and Send Email Using Mailable Classes](#episodio-24---how-to-preview-and-send-email-using-mailable-classes)
+- [Episodio 25 - Queues Are Easier Than You Think](#episodio-25---queues-are-easier-than-you-think)
 
 ---
 # Unidad I - Baby Steps
@@ -4487,6 +4490,8 @@ routes/
 4. **Seguridad mejorada**: Múltiples capas de verificación protegen los recursos.
 5. **Experiencia de usuario**: Interfaz clara y consistente, con acceso restringido según permisos.
 
+# Unidad V - Digging Deeper
+
 # Episodio 24 - How to Preview and Send Email Using Mailable Classes
 
 ## Introducción al Envío de Correos Electrónicos
@@ -4833,6 +4838,312 @@ El correo electrónico enviado se ve como un mensaje simple pero funcional, con 
 4. **Seguridad**: Los enlaces generados con `url()` funcionan en cualquier entorno, y la eliminación de la ruta de prueba evita vulnerabilidades.
 5. **Escalabilidad**: La estructura del Mailable permite agregar más funcionalidades, como adjuntos o contenido personalizado.
 6. **Mantenibilidad**: La separación de la lógica de correo en `JobPosted.php` y `job-posted.blade.php` facilita futuras modificaciones.
+
+# Episodio 25 - Queues Are Easier Than You Think
+
+## Introducción a las Colas
+
+En este episodio, exploramos cómo implementar colas en Laravel para procesar tareas de manera asíncrona, mejorando el rendimiento de la aplicación. Introducimos el uso de colas para diferir el envío de correos electrónicos (como la notificación de trabajos creados) y creamos una clase de trabajo personalizada para traducir listados de trabajos. Este proceso incluye configurar un controlador de cola, encolar trabajos, ejecutar un trabajador de cola, y usar cierres encolados para tareas diferidas.
+
+## Configurando las Colas
+
+Laravel soporta múltiples controladores de cola, y la configuración se realiza principalmente en el archivo `.env`. El controlador predeterminado se define con la variable `QUEUE_CONNECTION`.
+
+### Controladores de Cola Disponibles
+- **sync**: Ejecuta trabajos de forma síncrona (predeterminado, útil para desarrollo local).
+- **database**: Almacena trabajos en una tabla de base de datos.
+- **beanstalkd, SQS, Redis**: Opciones más robustas para entornos de producción.
+
+### Configuración en `.env`
+El valor predeterminado en un proyecto Laravel recién instalado es `QUEUE_CONNECTION=database`, por lo que no es necesario modificarlo a menos que desees usar otro controlador. Verifica o actualiza el archivo `.env` si es necesario:
+
+```env
+QUEUE_CONNECTION=database
+```
+
+**Detalles:**
+- El controlador `database` utiliza una tabla `jobs` para almacenar los trabajos encolados y una tabla `failed_jobs` para registrar los fallidos. Dado que has realizado migraciones en capítulos anteriores, estas tablas deberían estar creadas automáticamente por Laravel al configurar `QUEUE_CONNECTION=database` y ejecutar `php artisan migrate`. Si no existen, puedes recrearlas con:
+  ```bash
+  php artisan queue:table
+  php artisan failed_jobs:table
+  php artisan migrate
+  ```
+
+### Configuración en `config/queue.php`
+Opcionalmente, podemos ajustar la configuración en `config/queue.php` si necesitamos personalizar las conexiones:
+
+```php
+<?php
+
+return [
+    'default' => env('QUEUE_CONNECTION', 'sync'),
+    'connections' => [
+        'database' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'default',
+            'retry_after' => 90,
+        ],
+    ],
+    'failed' => [
+        'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuid'),
+        'database' => env('DB_CONNECTION', 'mysql'),
+        'table' => 'failed_jobs',
+    ],
+];
+```
+
+**Nota:** Los valores en `.env` tienen prioridad sobre los definidos en `config/queue.php`.
+
+## Encolando Trabajos
+
+Modificamos el controlador `JobController` para encolar el envío de correos en lugar de ejecutarlo inmediatamente.
+
+### Actualizando el Controlador
+Cambiamos el método `store` en `app/Http/Controllers/JobController.php`:
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Mail\JobPosted;
+use App\Models\Job;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
+
+class JobController extends Controller
+{
+    public function index()
+    {
+        $jobs = Job::with('employer')->latest()->simplePaginate(3);
+
+        return view('jobs.index', [
+            'jobs' => $jobs
+        ]);
+    }
+
+    public function create()
+    {
+        return view('jobs.create');
+    }
+
+    public function show(Job $job)
+    {
+        return view('jobs.show', ['job' => $job]);
+    }
+
+    public function store()
+    {
+        request()->validate([
+            'title' => ['required', 'min:3'],
+            'salary' => ['required']
+        ]);
+
+        $job = Job::create([
+            'title' => request('title'),
+            'salary' => request('salary'),
+            'employer_id' => 1 // Valor temporal fijo
+        ]);
+
+        Mail::to($job->employer->user)->queue(new JobPosted($job));
+
+        return redirect('/jobs');
+    }
+
+    public function edit(Job $job)
+    {
+        return view('jobs.edit', ['job' => $job]);
+    }
+
+    public function update(Job $job)
+    {
+        Gate::authorize('edit-job', $job);
+
+        request()->validate([
+            'title' => ['required', 'min:3'],
+            'salary' => ['required']
+        ]);
+
+        $job->update([
+            'title' => request('title'),
+            'salary' => request('salary'),
+        ]);
+
+        return redirect('/jobs/' . $job->id);
+    }
+
+    public function destroy(Job $job)
+    {
+        Gate::authorize('edit-job', $job);
+
+        $job->delete();
+
+        return redirect('/jobs');
+    }
+}
+```
+
+**Cambios realizados:**
+- **Encolado del correo**: Reemplazamos `send` por `queue` en `Mail::to($job->employer->user)->queue(new JobPosted($job))`, lo que encola el envío del correo para ser procesado por un trabajador de cola.
+- **Relaciones**: Seguimos usando `$job->employer->user` para determinar el destinatario.
+
+**Nota:** El `employer_id` sigue siendo fijo en 1 por ahora, pero en episodios futuros se vinculará al usuario autenticado.
+
+## Ejecutando el Trabajador de Cola
+
+Para procesar los trabajos encolados, necesitamos ejecutar un trabajador de cola.
+
+### Comando Artisan
+En la terminal, ejecutamos:
+
+```bash
+php artisan queue:work
+```
+
+**Detalles:**
+- Este comando escucha los trabajos encolados y los procesa según el controlador configurado (en este caso, `database`).
+- Mantén la terminal abierta mientras pruebas, ya que el trabajador se detiene si cierras la sesión.
+- Si realizas cambios en el código, reinicia el trabajador con `Ctrl+C` y vuelve a ejecutarlo.
+
+**Alternativa con supervisión:**
+Para entornos de producción, considera usar un supervisor como `supervisorctl` para mantener el trabajador activo.
+
+## Usando Cierres Encolados
+
+Laravel permite encolar cierres simples para tareas diferidas.
+
+### Ejemplo de Cierre Encolado
+En cualquier parte de tu código (por ejemplo, un controlador o una ruta), usa:
+
+```php
+dispatch(function () {
+    logger('Hello from the queue');
+})->delay(now()->addSeconds(5));
+```
+
+**Detalles:**
+- El cierre se ejecuta después de un retraso de 5 segundos.
+- Es útil para tareas como notificaciones diferidas o procesamiento en segundo plano.
+
+## Creando Clases de Trabajo Personalizadas
+
+Generamos una clase de trabajo para tareas más complejas, como traducir listados de trabajos.
+
+### Comando Artisan
+En la terminal, ejecutamos:
+
+```bash
+php artisan make:job TranslateJob
+```
+
+**Resultado:**
+- Se genera un nuevo archivo en `app/Jobs/TranslateJob.php`.
+
+### Configurando la Clase de Trabajo
+Modificamos el archivo `app/Jobs/TranslateJob.php`:
+
+```php
+<?php
+
+namespace App\Jobs;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+
+class TranslateJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $jobListing;
+
+    public function __construct($jobListing)
+    {
+        $this->jobListing = $jobListing;
+    }
+
+    public function handle()
+    {
+        // Lógica para traducir el listado de trabajos
+        logger('Translating job listing: ' . $this->jobListing->title);
+        // Aquí iría la lógica real de traducción (por ejemplo, usando una API)
+    }
+}
+```
+
+**Detalles:**
+- **Constructor**: Acepta un listado de trabajos (`$jobListing`) para procesar.
+- **Método `handle`**: Contiene la lógica del trabajo, en este caso, un log simple como ejemplo.
+
+### Despachando la Clase de Trabajo
+En cualquier parte del código (por ejemplo, en `JobController` después de crear un trabajo), despachamos:
+
+```php
+TranslateJob::dispatch($job);
+```
+
+**Nota:** Reinicia el trabajador de cola (`php artisan queue:work`) después de crear o modificar la clase de trabajo.
+
+## Probando las Colas
+
+### Flujo de Prueba
+1. **Verificar las tablas**:
+   - Confirma que las tablas `jobs` y `failed_jobs` existen en tu base de datos debido a migraciones previas. Si no están presentes, crea las migraciones con:
+     ```bash
+     php artisan queue:table
+     php artisan failed_jobs:table
+     php artisan migrate
+     ```
+2. **Encolar un correo**:
+   - Crea un trabajo en `/jobs/create` y verifica que aparezca un registro en la tabla `jobs`.
+
+   ![Correo Electrónico en cola en la tabla jobs](./images/26.PNG "Correo electrónico en cola en la tabla jobs")
+
+3. **Ejecutar el trabajador**:
+   - Inicia `php artisan queue:work` en una terminal.
+
+   ![Comando php artisan queue:work ejecutandose](./images/27.PNG "Comando php artisan queue:work ejecutandose")
+
+   - Observa que el correo se envía y desaparece el registro de la tabla `jobs`.
+
+![Correo Electrónico recibido en Mailtrap](./images/28.PNG "Correo electrónico recibido en Mailtrap")
+
+![Tabla jobs vacia después de enviar el correo correctamente](./images/29.PNG "Tabla jobs vacia después de enviar el correo correctamente")
+
+4. **Probar un cierre encolado**:
+   - Agrega el ejemplo de `dispatch` en una ruta o controlador y verifica el log después de 5 segundos.
+5. **Probar una clase de trabajo**:
+   - Despacha `TranslateJob::dispatch($job)` y revisa el log o la salida del trabajador.
+
+### Verificación en la Base de Datos
+- Consulta la tabla `jobs` para ver trabajos pendientes:
+  ```sql
+  SELECT * FROM jobs;
+  ```
+- Si un trabajo falla, revisa `failed_jobs`.
+
+## Resultado Visual
+- El trabajador de cola procesa los trabajos encolados, enviando correos o ejecutando tareas como la traducción sin bloquear la respuesta HTTP.
+- Los logs muestran mensajes como "Hello from the queue" o "Translating job listing: [título]".
+
+## Conceptos Clave del Episodio
+- **Controladores de cola**: Configuración de `QUEUE_CONNECTION` para manejar trabajos.
+- **Encolado de correos**: Uso de `queue` en lugar de `send` para diferir envíos.
+- **Trabajador de cola**: Ejecución con `php artisan queue:work`.
+- **Cierres encolados**: Tareas simples con `dispatch` y retrasos.
+- **Clases de trabajo**: Creación y despacho de trabajos personalizados con `make:job`.
+
+## Beneficios de los Cambios Realizados
+1. **Rendimiento mejorado**: Las colas evitan que el envío de correos retrase la respuesta al usuario.
+2. **Escalabilidad**: Permite procesar tareas pesadas en segundo plano.
+3. **Flexibilidad**: Los cierres y clases de trabajo permiten personalizar tareas.
+4. **Mantenimiento**: Las tablas `jobs` y `failed_jobs` facilitan el monitoreo.
+5. **Facilidad de uso**: La configuración es sencilla con comandos Artisan.
 
 ---
 

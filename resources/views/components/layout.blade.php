@@ -16,7 +16,7 @@
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <img class="h-8 w-8" src="https://assets.laracasts.com/images/primary-logo-symbol.svg"
-                                alt="Your Company">"
+                                alt="Your Company">
                         </div>
                         <div class="hidden md:block">
                             <div class="ml-10 flex items-baseline space-x-4">

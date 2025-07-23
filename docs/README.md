@@ -31,6 +31,7 @@
 - [Episodio 21 - Make a Login and Registration System From Scratch: Part 1](#episodio-21---make-a-login-and-registration-system-from-scratch-part-1)
 - [Episodio 22 - Make a Login and Registration System From Scratch: Part 2](#episodio-22---make-a-login-and-registration-system-from-scratch-part-2)
 - [Episodio 23 - 6 Steps to Authorization Mastery](#episodio-23---6-steps-to-authorization-mastery)
+- [Episodio 24 - How to Preview and Send Email Using Mailable Classes](#episodio-24---how-to-preview-and-send-email-using-mailable-classes)
 
 ---
 # Unidad I - Baby Steps
@@ -4485,6 +4486,353 @@ routes/
 3. **Escalabilidad**: La estructura permite agregar más reglas de autorización fácilmente.
 4. **Seguridad mejorada**: Múltiples capas de verificación protegen los recursos.
 5. **Experiencia de usuario**: Interfaz clara y consistente, con acceso restringido según permisos.
+
+# Episodio 24 - How to Preview and Send Email Using Mailable Classes
+
+## Introducción al Envío de Correos Electrónicos
+
+En este episodio, implementamos el envío de correos electrónicos en nuestra aplicación Laravel utilizando la funcionalidad de **Mailables**. Configuramos una notificación por correo cada vez que se crea un nuevo trabajo, incluyendo un enlace dinámico al listado del trabajo. Este proceso incluye la generación de un Mailable, la creación de una vista para el correo, la configuración de un servicio SMTP para pruebas y la integración con nuestro controlador de trabajos para enviar correos automáticamente.
+
+## Generando una Clase Mailable
+
+Para enviar correos electrónicos, Laravel proporciona una clase **Mailable** que define el contenido, el asunto y los destinatarios del correo. Creamos una nueva clase Mailable utilizando Artisan.
+
+### Comando Artisan
+
+En la terminal, ejecutamos:
+
+```bash
+php artisan make:mail JobPosted
+```
+
+**Resultado:**
+- Se genera un nuevo archivo en `app/Mail/JobPosted.php`.
+- Este archivo contiene una clase `JobPosted` que extiende de `Illuminate\Mail\Mailable`.
+
+### Configurando el Mailable
+
+Modificamos el archivo `app/Mail/JobPosted.php` para definir el contenido del correo y pasar datos dinámicos, como el trabajo recién creado.
+
+```php
+<?php
+
+namespace App\Mail;
+
+use App\Models\Job;
+use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\SerializesModels;
+
+class JobPosted extends Mailable
+{
+    use Queueable, SerializesModels;
+
+    public $job;
+
+    /**
+     * Create a new message instance.
+     */
+    public function __construct(Job $job)
+    {
+        $this->job = $job;
+    }
+
+    /**
+     * Get the message envelope.
+     */
+    public function envelope(): Envelope
+    {
+        return new Envelope(
+            subject: 'Your Job Listing is Live!',
+            from: 'info@laracasts.com',
+            tags: ['job-posted']
+        );
+    }
+
+    /**
+     * Get the message content definition.
+     */
+    public function content(): Content
+    {
+        return new Content(
+            view: 'mail.job-posted',
+        );
+    }
+
+    /**
+     * Get the attachments for the message.
+     */
+    public function attachments(): array
+    {
+        return [];
+    }
+}
+```
+
+**Detalles:**
+- **Constructor**: Acepta una instancia del modelo `Job` para pasar datos dinámicos al correo.
+- **Método `envelope`**: Define el asunto del correo (`subject`), el remitente (`from`) y etiquetas (`tags`) para organización.
+- **Método `content`**: Especifica la vista Blade (`mail.job-posted`) que contendrá el cuerpo del correo.
+- **Método `attachments`**: Actualmente vacío, pero permite agregar archivos adjuntos si es necesario.
+
+## Creando la Vista del Correo Electrónico
+
+Creamos una vista Blade para definir el contenido del correo electrónico, que será renderizado cuando se envíe el correo. La vista se crea en el directorio `resources/views/mail/` con el nombre `job-posted.blade.php`.
+
+### Archivo de la Vista
+
+**Ubicación:** `resources/views/mail/job-posted.blade.php`
+
+```blade
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Your Job Listing is Live!</title>
+</head>
+<body>
+    <p>Congrats, your job is now live on our website.</p>
+    <p>
+        <a href="{{ url('jobs/' . $job->id) }}">View your job listing</a>
+    </p>
+</body>
+</html>
+```
+
+**Detalles:**
+- **Ubicación del archivo**: El archivo `job-posted.blade.php` debe colocarse en el subdirectorio `mail` dentro de `resources/views/`. Si el directorio `mail` no existe, créalo manualmente.
+- **Contenido simple**: Incluye un mensaje de felicitación y un enlace al trabajo recién creado.
+- **Helper `url()`**: Genera una URL completa (por ejemplo, `http://30days.isw811.xyz/jobs/1`) para el enlace, asegurando compatibilidad en entornos locales y de producción.
+- **Acceso a datos dinámicos**: Usa `$job->id` para crear un enlace específico al trabajo.
+
+## Previsualizando el Correo Electrónico
+
+Para verificar cómo se verá el correo antes de enviarlo, creamos una ruta temporal que retorna una instancia del Mailable.
+
+### Ruta Temporal
+
+Agregamos la siguiente ruta temporal para pruebas en `routes/web.php`:
+
+```php
+Route::get('/test', function () {
+    return new \App\Mail\JobPosted(\App\Models\Job::first());
+});
+```
+
+**Uso:**
+- Visitamos `http://30days.isw811.xyz/test` en el navegador.
+- Esto renderiza la vista `mail.job-posted` con los datos del primer trabajo en la base de datos, permitiendo verificar el diseño del correo.
+
+![Correo Electrónico de Prueba](./images/24.PNG "Correo electrónico recibido")
+
+**Eliminación de la ruta**: Después de probar la previsualización, **es crucial eliminar esta ruta** de `routes/web.php` para evitar exponerla en producción o causar errores inesperados.
+
+## Configurando el Envío de Correos
+
+Integramos el envío del correo en el controlador `JobController` para que se envíe automáticamente cuando se crea un nuevo trabajo.
+
+### Actualizando el Controlador
+
+Modificamos el método `store` en `app/Http/Controllers/JobController.php` para enviar el correo después de crear el trabajo.
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Mail\JobPosted;
+use App\Models\Job;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
+
+class JobController extends Controller
+{
+    public function index()
+    {
+        $jobs = Job::with('employer')->latest()->simplePaginate(3);
+
+        return view('jobs.index', [
+            'jobs' => $jobs
+        ]);
+    }
+
+    public function create()
+    {
+        return view('jobs.create');
+    }
+
+    public function show(Job $job)
+    {
+        return view('jobs.show', ['job' => $job]);
+    }
+
+    public function store()
+    {
+        request()->validate([
+            'title' => ['required', 'min:3'],
+            'salary' => ['required']
+        ]);
+
+        $job = Job::create([
+            'title' => request('title'),
+            'salary' => request('salary'),
+            'employer_id' => 1 // Valor temporal fijo
+        ]);
+
+        Mail::to($job->employer->user)->send(new JobPosted($job));
+
+        return redirect('/jobs');
+    }
+
+    public function edit(Job $job)
+    {
+        return view('jobs.edit', ['job' => $job]);
+    }
+
+    public function update(Job $job)
+    {
+        Gate::authorize('edit-job', $job);
+
+        request()->validate([
+            'title' => ['required', 'min:3'],
+            'salary' => ['required']
+        ]);
+
+        $job->update([
+            'title' => request('title'),
+            'salary' => request('salary'),
+        ]);
+
+        return redirect('/jobs/' . $job->id);
+    }
+
+    public function destroy(Job $job)
+    {
+        Gate::authorize('edit-job', $job);
+
+        $job->delete();
+
+        return redirect('/jobs');
+    }
+}
+```
+
+**Cambios realizados:**
+- **Importación**: Agregamos `use Illuminate\Support\Facades\Mail;` y `use App\Mail\JobPosted;`.
+- **Envío del correo**: Usamos `Mail::to($job->employer->user)->send(new JobPosted($job));` para enviar el correo al usuario propietario del empleador asociado al trabajo. Laravel automáticamente resuelve el atributo `email` del modelo `User`.
+- **Relaciones**: Navegamos por las relaciones `$job->employer->user` para obtener el destinatario del correo.
+
+**Nota:** El `employer_id` está fijado temporalmente a `1`. En episodios futuros, esto se vinculará dinámicamente al usuario autenticado.
+
+## Configurando el Servicio de Correo
+
+Para enviar correos en un entorno local, configuramos un servicio SMTP como **Mailtrap**, que es ideal para pruebas. Actualizamos el archivo `.env` con las credenciales de Mailtrap.
+
+### Configuración en `.env`
+
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=sandbox.smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=your_username
+MAIL_PASSWORD=your_password
+MAIL_FROM_ADDRESS=info@laracasts.com
+MAIL_FROM_NAME="Laracasts"
+```
+
+**Detalles:**
+- **`MAIL_MAILER`**: Define el controlador de correo (`smtp` para Mailtrap).
+- **`MAIL_HOST` y `MAIL_PORT`**: Especifican el servidor y puerto de Mailtrap.
+- **`MAIL_USERNAME` y `MAIL_PASSWORD`**: Credenciales proporcionadas por Mailtrap.
+- **`MAIL_FROM_ADDRESS` y `MAIL_FROM_NAME`**: Definen el remitente del correo.
+
+**Alternativa:** Si no se configura un servicio SMTP, Laravel registra los correos en `storage/logs/laravel.log` en entornos locales, útil para pruebas sin un servidor de correo.
+
+### Configuración en `config/mail.php`
+
+Opcionalmente, podemos configurar los valores predeterminados en `config/mail.php` si preferimos no usar el archivo `.env`.
+
+```php
+<?php
+
+return [
+    'default' => env('MAIL_MAILER', 'smtp'),
+    'mailers' => [
+        'smtp' => [
+            'transport' => 'smtp',
+            'host' => env('MAIL_HOST', 'sandbox.smtp.mailtrap.io'),
+            'port' => env('MAIL_PORT', 2525),
+            'encryption' => env('MAIL_ENCRYPTION', 'tls'),
+            'username' => env('MAIL_USERNAME'),
+            'password' => env('MAIL_PASSWORD'),
+            'timeout' => null,
+            'local_domain' => env('MAIL_EHLO_DOMAIN'),
+        ],
+    ],
+    'from' => [
+        'address' => env('MAIL_FROM_ADDRESS', 'info@laracasts.com'),
+        'name' => env('MAIL_FROM_NAME', 'Laracasts'),
+    ],
+];
+```
+
+**Nota:** Los valores en `.env` tienen prioridad sobre los definidos en `config/mail.php`.
+
+## Probando el Envío de Correos
+
+### Flujo de Prueba
+
+1. **Crear un trabajo**:
+   - Navegamos a `/jobs/create` y completamos el formulario con un título y salario.
+   - Al enviar el formulario, el método `store` crea el trabajo y envía el correo.
+
+2. **Verificar en Mailtrap**:
+   - Iniciamos sesión en Mailtrap (o el servicio SMTP configurado).
+   - Revisamos la bandeja de entrada de pruebas para confirmar que el correo fue recibido.
+   - Verificamos que el correo contiene el mensaje "Congrats, your job is now live on our website" y el enlace correcto al trabajo.
+
+3. **Verificar en el Log (sin SMTP)**:
+   - Si no hay un servicio SMTP configurado, abrimos `storage/logs/laravel.log`.
+   - Buscamos el contenido del correo registrado, que incluye el asunto, el cuerpo y los datos enviados.
+
+### Previsualización en el Navegador
+
+- Visitamos `/test` (antes de eliminar la ruta) para previsualizar el correo renderizado.
+- Verificamos que el enlace en el correo (`<a href="...">`) apunta correctamente al trabajo (por ejemplo, `http://30days.isw811.xyz/jobs/1`).
+- **Importante**: Recordar eliminar la ruta `/test` de `routes/web.php` después de las pruebas para evitar problemas en producción.
+
+## Resultado Visual
+
+El correo electrónico enviado se ve como un mensaje simple pero funcional, con un diseño limpio y un enlace clicable al listado del trabajo.
+
+![Correo Electrónico de Prueba en Mailtrap](./images/25.PNG "Correo electrónico recibido en Mailtrap")
+
+**Captura de pantalla (simulada):**
+- **Asunto**: "Your Job Listing is Live!"
+- **Cuerpo**: "Congrats, your job is now live on our website." seguido de un enlace "View your job listing".
+- **Remitente**: `info@laracasts.com (Laracasts)`.
+
+## Conceptos Clave del Episodio
+
+- **Clases Mailable**: Uso de `make:mail` para generar clases que definen correos electrónicos.
+- **Vistas de Correo**: Creación de vistas Blade para el contenido del correo, con acceso a datos dinámicos.
+- **Envío de Correos**: Uso del facade `Mail` para enviar correos, pasando un objeto `User` como destinatario.
+- **Configuración SMTP**: Configuración de Mailtrap para pruebas de correo en entornos locales.
+- **URLs Dinámicas**: Uso del helper `url()` para generar enlaces completos en correos.
+- **Previsualización y limpieza**: Creación de rutas temporales para pruebas y su eliminación posterior para mantener la seguridad.
+
+## Beneficios de los Cambios Realizados
+
+1. **Notificaciones automáticas**: Los usuarios reciben un correo de confirmación al crear un trabajo, mejorando la experiencia de usuario.
+2. **Configuración flexible**: La integración con Mailtrap permite probar correos sin enviarlos a usuarios reales.
+3. **Datos dinámicos**: Los correos incluyen información específica del trabajo, como un enlace directo al listado.
+4. **Seguridad**: Los enlaces generados con `url()` funcionan en cualquier entorno, y la eliminación de la ruta de prueba evita vulnerabilidades.
+5. **Escalabilidad**: La estructura del Mailable permite agregar más funcionalidades, como adjuntos o contenido personalizado.
+6. **Mantenibilidad**: La separación de la lógica de correo en `JobPosted.php` y `job-posted.blade.php` facilita futuras modificaciones.
 
 ---
 

@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Route;
 Route::view('/', 'home');
 Route::view('/contact', 'contact');
 
+Route::get('/test', function () {
+    return new \App\Mail\JobPosted(\App\Models\Job::first());
+});
+
 // Rutas de Jobs
 Route::get('/jobs', [JobController::class, 'index']);
 Route::get('/jobs/create', [JobController::class, 'create']);

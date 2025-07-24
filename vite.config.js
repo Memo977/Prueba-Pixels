@@ -1,11 +1,31 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
+import fs from 'fs';
 
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
+            input: ['resources/js/app.js'],
             refresh: true,
         }),
     ],
+    server: {
+        host: '0.0.0.0',
+        port: 5173,
+        strictPort: true,
+        watch: {
+            usePolling: true, // Necesario para entornos virtuales (Vagrant, WSL2, etc.)
+            interval: 100, // Intervalo de sondeo en milisegundos
+            ignored: ['!**/dist/'],
+        },
+        https: {
+            key: fs.readFileSync('/vagrant/ssl/30days.isw811.xyz/privkey.pem'),
+            cert: fs.readFileSync('/vagrant/ssl/30days.isw811.xyz/fullchain.pem'),
+        },
+        hmr: {
+            protocol: 'wss',
+            host: '30days.isw811.xyz',
+            port: 5173,
+        },
+    },
 });

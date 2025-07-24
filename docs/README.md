@@ -35,6 +35,8 @@
 ## Unidad V - Digging Deeper
 - [Episodio 24 - How to Preview and Send Email Using Mailable Classes](#episodio-24---how-to-preview-and-send-email-using-mailable-classes)
 - [Episodio 25 - Queues Are Easier Than You Think](#episodio-25---queues-are-easier-than-you-think)
+- [Episodio 26 - Get Your Build Process in Order](#episodio-26---get-your-build-process-in-order)
+
 
 ---
 # Unidad I - Baby Steps
@@ -5144,6 +5146,452 @@ TranslateJob::dispatch($job);
 3. **Flexibilidad**: Los cierres y clases de trabajo permiten personalizar tareas.
 4. **Mantenimiento**: Las tablas `jobs` y `failed_jobs` facilitan el monitoreo.
 5. **Facilidad de uso**: La configuración es sencilla con comandos Artisan.
+
+# Episodio 26 - Get Your Build Process in Order
+
+## Prerrequisitos
+
+### Habilitar Enlaces Simbólicos en Windows
+
+Cuando utilizas *Vagrant* para virtualizar sistemas operativos tipo GNU/Linux sobre Windows (7, 8, 10, 11, etc.), puedes encontrar un error al ejecutar comandos como `npm install`. Esto ocurre porque herramientas como *NPM* intentan crear enlaces simbólicos (symlinks) al instalar dependencias, y Windows, por defecto, no permite a usuarios sin privilegios administrativos crear symlinks. A continuación, se explican los pasos para habilitar esta funcionalidad. **Nota**: Los pasos para habilitar la herramienta *Local Security Policy* (`secpol.msc`) son necesarios solo para ediciones *Home Edition* de Windows, ya que no incluyen esta herramienta por defecto. Los pasos para otorgar permisos de creación de symlinks aplican a todas las versiones de Windows (Home, Pro, Enterprise, etc.).
+
+#### Paso 1 — Habilitar el Editor de Políticas de Seguridad en Windows Home Edition
+
+Si utilizas Windows 7, 8, 10, 11, etc., en cualquiera de sus versiones *Home Edition*, debes habilitar la herramienta *Local Security Policy* (`secpol.msc`), necesaria para autorizar a tu usuario la creación de symlinks. Sigue estos pasos:
+
+1. **Abrir una terminal CMD como administrador**:
+   - Haz clic con el botón derecho sobre el icono de CMD y selecciona "Ejecutar como administrador".
+
+2. **Ejecutar el comando para agregar los componentes del sistema**:
+   - Ejecuta el siguiente comando para instalar el paquete de herramientas de políticas de grupo, que incluye `secpol.msc`:
+     ```bash
+     FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientTools-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")
+     ```
+   - Este comando utiliza *DISM* (Deployment Image Servicing and Management) para instalar los componentes necesarios.
+
+3. **Añadir la extensión que soporta las políticas de grupo**:
+   - Ejecuta el segundo comando para agregar las extensiones necesarias:
+     ```bash
+     FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientExtensions-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")
+     ```
+   - Este comando agrega las extensiones necesarias para que las políticas de grupo funcionen correctamente en tu sistema.
+
+4. **Reiniciar el equipo**:
+   - Después de ejecutar los comandos anteriores, reinicia tu equipo para que los cambios surtan efecto y la herramienta *Local Security Policy* esté disponible.
+
+**Nota**: Si usas Windows Pro, Enterprise u otras ediciones que no sean *Home Edition*, la herramienta `secpol.msc` ya está disponible, por lo que puedes omitir este paso e ir directamente al *Paso 2*.
+
+#### Paso 2 — Otorgar Permisos para Crear Symlinks
+
+Una vez que `secpol.msc` está disponible (o si ya lo estaba en tu edición de Windows), sigue estos pasos para otorgar a tu usuario permisos para crear symlinks:
+
+1. **Abrir el editor de políticas de seguridad local**:
+   - Presiona `Win + R`, escribe `secpol.msc` y presiona Enter.
+
+   ![Comando a secpol.msc](./images/30.PNG "Comando a secpol.msc a ejecutar")
+
+2. **Navegar a la sección de asignación de derechos**:
+   - En el menú del lado izquierdo, ve a `Directivas locales > Asignación de derechos de usuario`.
+
+3. **Configurar la política de enlaces simbólicos**:
+   - Busca la política **Crear vínculos simbólicos** y haz doble clic sobre ella.
+
+    ![Ubicación de ka directiva para asignar derechos](./images/31.PNG "Ubicación de ka directiva para asignar derechos")
+
+4. **Agregar un usuario o grupo**:
+   - Haz clic en **Agregar usuario o grupo**.
+
+   ![Ubicación de ka directiva para asignar derechos](./images/32.PNG "Ubicación de ka directiva para asignar derechos")
+
+5. **Acceder a opciones avanzadas**:
+   - En la ventana emergente, haz clic en **Opciones avanzadas**.
+
+6. **Seleccionar el usuario**:
+   - Haz clic en **Buscar ahora** para listar los usuarios disponibles.
+   - Selecciona tu nombre de usuario o el del usuario al que deseas otorgar permisos y haz clic en **Aceptar**.
+
+   ![Seleccionar Usuario](./images/33.PNG "Seleccionar Usuario")
+
+7. **Confirmar la selección**:
+   - Haz clic en **Aceptar** para confirmar la selección del usuario.
+
+   ![Confirmación de selección](./images/34.PNG "Confirmación de selección")
+
+8. **Aplicar los cambios**:
+   - Confirma los cambios haciendo clic en **Aplicar** y luego en **Aceptar**.
+
+   ![Confirmación de cambios](./images/35.PNG "Confirmación de cambios")
+
+9. **Reiniciar el equipo**:
+   - Para que los permisos de creación de enlaces simbólicos surtan efecto, reinicia tu computadora. Sin este paso, el error relacionado con los symlinks persistirá.
+
+**Conclusión**: Con estos pasos, habrás habilitado la creación de enlaces simbólicos para tu usuario en Windows. Esta funcionalidad es especialmente útil para desarrolladores que trabajan con herramientas como *NPM* y *Vagrant*, las cuales a menudo requieren symlinks para la correcta instalación de dependencias. Si el problema persiste, verifica que el usuario seleccionado tenga los permisos correctos y que el sistema se haya reiniciado.
+
+---
+
+## Introducción a Vite y Tailwind CSS
+
+En este episodio, configuramos **Vite** y **Tailwind CSS** en nuestro proyecto Laravel dentro de un entorno Vagrant, tanto para un entorno sin certificados SSL (HTTP) como con certificados SSL (HTTPS). Este proceso optimiza el manejo de assets, permite recarga en caliente y asegura que los estilos de Tailwind se integren correctamente en la aplicación. La aplicación estará disponible en `http://30days.isw811.xyz` (HTTP) o `https://30days.isw811.xyz` (HTTPS).
+
+### Configuración del Entorno
+
+#### Verificación de Node.js y npm
+
+En la máquina virtual, accede al directorio del proyecto y verifica la instalación de Node.js y npm:
+
+```bash
+vagrant@webserver:~/sites/30days.isw811.xyz$ node -v
+vagrant@webserver:~/sites/30days.isw811.xyz$ npm -v
+```
+
+**Salida esperada** (ejemplo):
+```
+v18.16.0
+9.5.0
+```
+
+Si no están instalados, ejecuta:
+
+```bash
+sudo apt update
+sudo apt install nodejs npm
+```
+
+#### Actualización del archivo `.env`
+
+Configura la URL de la aplicación según el entorno en el archivo `.env`:
+
+**Para HTTP:**
+```env
+APP_URL=http://30days.isw811.xyz
+```
+
+**Para HTTPS:**
+```env
+APP_URL=https://30days.isw811.xyz
+```
+
+#### Iniciar la Máquina Virtual
+
+Desde la máquina anfitriona, inicia Vagrant y accede al proyecto:
+
+```bash
+vagrant up
+vagrant ssh
+cd /home/vagrant/sites/30days.isw811.xyz
+```
+
+**Ruta del proyecto en la máquina anfitriona:**
+```
+/ISW811/M/VMs/webserver/sites/30days.isw811.xyz
+```
+
+### Configuración de Vite
+
+Vite está integrado en Laravel a través del plugin `laravel-vite-plugin`. Configuramos Vite para ambos entornos.
+
+#### Caso 1: Sin certificados (HTTP)
+
+**Archivo:** `vite.config.js`
+
+```javascript
+import { defineConfig } from 'vite';
+import laravel from 'laravel-vite-plugin';
+
+export default defineConfig({
+    plugins: [
+        laravel({
+            input: ['resources/js/app.js'],
+            refresh: true,
+        }),
+    ],
+    server: {
+        host: '0.0.0.0',
+        port: 5173,
+        hmr: {
+            host: '30days.isw811.xyz',
+            port: 5173,
+        },
+    },
+});
+```
+
+#### Caso 2: Con certificados (HTTPS)
+
+**Archivo:** `vite.config.js`
+
+```javascript
+import { defineConfig } from 'vite';
+import laravel from 'laravel-vite-plugin';
+import fs from 'fs';
+
+export default defineConfig({
+    plugins: [
+        laravel({
+            input: ['resources/js/app.js'],
+            refresh: true,
+        }),
+    ],
+    server: {
+        host: '0.0.0.0',
+        port: 5173,
+        https: {
+            key: fs.readFileSync('/vagrant/ssl/30days.isw811.xyz/privkey.pem'),
+            cert: fs.readFileSync('/vagrant/ssl/30days.isw811.xyz/fullchain.pem'),
+        },
+        hmr: {
+            protocol: 'wss',
+            host: '30days.isw811.xyz',
+            port: 5173,
+        },
+    },
+});
+```
+
+**Nota sobre certificados SSL**: Los archivos `fullchain.pem` y `privkey.pem` deben estar en `/vagrant/ssl/30days.isw811.xyz/`.
+
+#### Configuración de `package.json`
+
+Verifica que el archivo `package.json` incluya los scripts y dependencias necesarias:
+
+```json
+{
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build"
+}
+```
+
+### Instalación y Configuración de Tailwind CSS
+
+#### Instalando Tailwind CSS y Dependencias
+
+Ejecuta los siguientes comandos para instalar Tailwind y sus dependencias:
+
+```bash
+npm install -D tailwindcss postcss autoprefixer
+npm install
+```
+
+#### Modificamos Tailwind CSS
+
+Mofidicamos el archivo de configuración de Tailwind:
+
+**Archivo:** `tailwind.config.js`
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+    content: [
+        "./resources/**/*.blade.php",
+        "./resources/**/*.js",
+        "./resources/**/*.vue",
+    ],
+    theme: {
+        extend: {
+            colors: {
+                "laracasts": "rgb(50,138,241)"
+            }
+        },
+    },
+    plugins: [],
+}
+```
+
+#### Configurando los Estilos
+
+Edita el archivo `resources/css/app.css` para incluir las directivas de Tailwind:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+#### Actualizando el Punto de Entrada de JavaScript
+
+Edita `resources/js/app.js` para importar los estilos:
+
+```javascript
+import './bootstrap';
+import '../css/app.css';
+```
+
+### Integrando Vite con las Vistas
+
+#### Actualizando el Layout Principal
+
+Modifica `resources/views/components/layout.blade.php` para incluir los assets de Vite:
+
+```blade
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Website</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body class="h-full">
+    <div class="min-h-full">
+        <nav class="bg-gray-800">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="hidden md:block">
+                            <div class="ml-10 flex items-baseline space-x-4">
+                                <x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+                                <x-nav-link href="/jobs" :active="request()->is('jobs*')">Jobs</x-nav-link>
+                                <x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-4 flex items-center md:ml-6">
+                            @auth
+                                <form method="POST" action="/logout">
+                                    @csrf
+                                    <x-form-button>Log Out</x-form-button>
+                                </form>
+                            @else
+                                <x-nav-link href="/login" :active="request()->is('login')">Log In</x-nav-link>
+                                <x-nav-link href="/register" :active="request()->is('register')">Register</x-nav-link>
+                            @endauth
+                        </div>
+                    </div>
+                    <div class="-mr-2 flex md:hidden">
+                        <button type="button" class="relative inline-flex items-center justify-center rounded-md bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-white" aria-controls="mobile-menu" aria-expanded="false">
+                            <span class="sr-only">Open main menu</span>
+                            <svg class="block h-6 w-6" fill="none" viewBox="0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                            </svg>
+                            <svg class="hidden h-6 w-6" fill="none" viewBox="0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="md:hidden" id="mobile-menu">
+                <div class="space-y-1 px-2 pb-3 pt-2 sm:px-3">
+                    <x-nav-link href="/" :active="request()->is('/')">Home</x-nav-link>
+                    <x-nav-link href="/jobs" :active="request()->is('jobs*')">Jobs</x-nav-link>
+                    <x-nav-link href="/contact" :active="request()->is('contact')">Contact</x-nav-link>
+                    @auth
+                        <form method="POST" action="/logout">
+                            @csrf
+                            <x-form-button>Log Out</x-form-button>
+                        </form>
+                    @else
+                        <x-nav-link href="/login" :active="request()->is('login')">Log In</x-nav-link>
+                        <x-nav-link href="/register" :active="request()->is('register')">Register</x-nav-link>
+                    @endauth
+                </div>
+            </div>
+        </nav>
+        <header class="bg-white shadow">
+            <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 sm:flex sm:justify-between">
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">{{ $heading }}</h1>
+                <x-button href="/jobs/create">Create Job</x-button>
+            </div>
+        </header>
+        <main>
+            <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+                {{ $slot }}
+            </div>
+        </main>
+    </div>
+</body>
+</html>
+```
+
+#### Actualizando la Vista de Jobs
+
+Edita `resources/views/jobs/index.blade.php` para aplicar estilos de Tailwind:
+
+```blade
+<x-layout>
+    <x-slot:heading>
+        Job Listings
+    </x-slot:heading>
+    <div class="space-y-4">
+        @foreach ($jobs as $job)
+            <a href="/jobs/{{ $job->id }}" class="block px-4 py-6 border border-gray-200 rounded-lg">
+                <div class="font-bold text-blue-500 text-sm">{{ $job->employer->name }}</div>
+                <div>
+                    <strong class="text-laracasts">{{ $job->title }}:</strong> Pays {{ $job->salary }} per year.
+                </div>
+            </a>
+        @endforeach
+        <div>
+            {{ $jobs->links() }}
+        </div>
+    </div>
+</x-layout>
+```
+
+### Ejecutando y Probando los Cambios
+
+#### Iniciar el Servidor de Vite
+
+Ejecuta Vite para desarrollo con recarga en caliente:
+
+```bash
+npm run dev
+```
+
+**Salida esperada en consola (HTTP):**
+```
+Local:    http://localhost:5173/
+Network:  http://30days.isw811.xyz:5173/
+```
+
+**Salida esperada en consola (HTTPS):**
+```
+Local:    https://localhost:5173/
+Network:  https://30days.isw811.xyz:5173/
+```
+
+#### Compilación para Producción
+
+Para generar assets optimizados:
+
+```bash
+npm run build
+```
+
+#### Verificando la Aplicación
+
+1. Accede a `http://30days.isw811.xyz` (HTTP) o `https://30days.isw811.xyz` (HTTPS).
+2. Verifica que los estilos de Tailwind y el color personalizado `laracasts` se apliquen en la página de trabajos (`/jobs`).
+3. Confirma que no hay errores SSL (`ERR_SSL_PROTOCOL_ERROR`) en el caso de HTTPS.
+4. Modifica `resources/css/app.css` y verifica que los cambios se reflejen instantáneamente en el navegador (recarga en caliente).
+
+### Resultado Visual
+
+- **Página de Trabajos**: Muestra tarjetas con bordes redondeados, espaciado uniforme y el color personalizado `laracasts` aplicado al título del trabajo.
+- **Diseño responsivo**: La navegación y el layout están optimizados con Tailwind CSS.
+- **Recarga en caliente**: Los cambios en los estilos o scripts se reflejan instantáneamente en el navegador.
+- **HTTPS (opcional)**: La aplicación se sirve de forma segura sin errores SSL cuando se configura.
+
+![Página de trabajos con Tailwind CSS aplicado](./images/36.PNG "Página de trabajos con Tailwind CSS")
+
+### Conceptos Clave del Episodio
+
+- **Vite**: Herramienta de empaquetado moderna con soporte para recarga en caliente, integrada con Laravel.
+- **Tailwind CSS**: Framework de estilos basado en clases utilitarias para un diseño rápido y consistente.
+- **HTTPS**: Configuración opcional con certificados SSL para entornos seguros.
+- **Configuración de Vite**: Uso de `vite.config.js` para definir el comportamiento del servidor de desarrollo.
+- **Integración con Blade**: Uso de la directiva `@vite` para incluir assets en las vistas.
+- **Color personalizado**: Definición del color `laracasts` en `tailwind.config.js`.
+
+### Beneficios de los Cambios Realizados
+
+1. **Rendimiento mejorado**: Vite optimiza la carga de assets y permite recarga en caliente.
+2. **Estilizado eficiente**: Tailwind CSS agiliza el diseño con clases utilitarias.
+3. **Desarrollo ágil**: La recarga en caliente acelera el ciclo de desarrollo.
+4. **Seguridad mejorada**: La configuración HTTPS asegura conexiones seguras (opcional).
+5. **Integración nativa**: Vite y Laravel trabajan juntos sin problemas.
 
 ---
 

@@ -37,6 +37,7 @@
 - [Episodio 25 - Queues Are Easier Than You Think](#episodio-25---queues-are-easier-than-you-think)
 - [Episodio 26 - Get Your Build Process in Order](#episodio-26---get-your-build-process-in-order)
 - [Episodio 27 - From Design to Blade](#episodio-27---from-design-to-blade)
+- [Episodio 28 - Blade and Tailwind Techniques for Your Laravel Views](#episodio-28---blade-and-tailwind-techniques-for-your-laravel-views)
 
 
 ---
@@ -5958,6 +5959,378 @@ La página principal (`welcome.blade.php`) muestra un diseño moderno y responsi
 4. **Base sólida**: La estructura está lista para integrar modelos, rutas, y datos dinámicos.
 5. **Responsividad**: El diseño se adapta a diferentes tamaños de pantalla con Tailwind.
 6. **Escalabilidad**: Los componentes y la configuración permiten agregar funcionalidades fácilmente.
+
+# Episodio 28 - Blade and Tailwind Techniques for Your Laravel Views
+
+## Introducción
+
+En este episodio, continuamos desarrollando el proyecto **Pixel Positions**, iniciado en el episodio 27, con un enfoque en técnicas avanzadas de Blade y Tailwind CSS para mejorar las vistas de Laravel. Introducimos nuevos componentes Blade (`panel.blade.php`, `employer-logo.blade.php`), optimizamos el componente `tag.blade.php` con soporte para diferentes tamaños, y creamos dos versiones de tarjetas de trabajo (`job-card.blade.php` y `job-card-wide.blade.php`). También actualizamos el layout principal (`layout.blade.php`) para incluir la fuente Hanken Grotesk y mejoramos la página principal (`welcome.blade.php`) con una sección de búsqueda y una disposición mejorada. Todo esto se integra con Tailwind CSS, configurado en `tailwind.config.js`, para lograr un diseño moderno, responsivo y reutilizable en el proyecto ubicado en `http://pixel.isw811.xyz`.
+
+## Cambios y Actualizaciones en el Proyecto
+
+### Configuración del Proyecto
+
+El proyecto **Pixel Positions** ya está configurado en la máquina virtual bajo la ruta:
+
+```
+/ISW811/M/VMs/webserver/sites/pixel.isw811.xyz
+```
+
+El archivo `.env` está configurado con:
+
+```env
+APP_NAME="Pixel Positions"
+APP_URL=http://pixel.isw811.xyz
+```
+
+**Nota:** Si usas HTTPS, asegúrate de configurar certificados SSL y actualizar `APP_URL` a `https://pixel.isw811.xyz`.
+
+### Configuración de Tailwind CSS
+
+El archivo `tailwind.config.js` se actualizó para incluir un color personalizado (`black`), la fuente Hanken Grotesk, y un tamaño de fuente adicional (`2xs`):
+
+**Archivo:** `tailwind.config.js`
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+    content: [
+        "./resources/**/*.blade.php",
+        "./resources/**/*.js",
+        "./resources/**/*.vue",
+    ],
+    theme: {
+        extend: {
+            colors: {
+                "black": "#060606"
+            },
+            fontFamily: {
+                "hanken-grotesk": ["Hanken Grotesk", "sans-serif"]
+            },
+            fontSize: {
+                "2xs": ".625rem" // 10px
+            }
+        },
+    },
+    plugins: [],
+}
+```
+
+**Detalles:**
+- **Color personalizado**: Define `black` como `#060606` para consistencia en el fondo.
+- **Fuente**: Agrega Hanken Grotesk como fuente principal (`font-hanken-grotesk`).
+- **Tamaño de fuente**: Introduce `2xs` (10px) para etiquetas pequeñas.
+
+### Actualización del Layout Principal
+
+El componente `layout.blade.php` se actualizó para incluir la fuente Hanken Grotesk mediante Google Fonts y aplicar la clase `font-hanken-grotesk` al elemento `<body>`.
+
+**Archivo:** `resources/views/components/layout.blade.php`
+
+```blade
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Pixel Positions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body class="bg-black text-white font-hanken-grotesk">
+    <div class="px-10">
+        <nav class="flex justify-between items-center py-4 border-b border-white/10">
+            <div>
+                <a href="/">
+                    <img src="{{ Vite::asset('resources/images/logo.svg') }}" alt="">
+                </a>
+            </div>
+            <div class="space-x-6 font-bold">
+                <a href="#">Jobs</a>
+                <a href="#">Careers</a>
+                <a href="#">Salaries</a>
+                <a href="#">Companies</a>
+            </div>
+            <div>
+                <a href="">Post a Job</a>
+            </div>
+        </nav>
+        <main class="mt-10 max-w-[986px] mx-auto">
+            {{ $slot }}
+        </main>
+    </div>
+</body>
+</html>
+```
+
+**Detalles:**
+- **Fuente**: Incluye Hanken Grotesk mediante Google Fonts.
+- **Estilo base**: Aplica `font-hanken-grotesk` al `<body>` para consistencia tipográfica.
+- **Navegación**: Mantiene la estructura de navegación estática con logo, enlaces y botón "Post a Job".
+
+### Nuevos y Actualizados Componentes Blade
+
+#### Componente Tag
+
+El componente `tag.blade.php` se modificó para soportar diferentes tamaños (`base` y `small`) usando propiedades Blade y clases dinámicas.
+
+**Archivo:** `resources/views/components/tag.blade.php`
+
+```blade
+@props(['size' => 'base'])
+
+@php
+$classes = "bg-white/10 hover:bg-white/25 rounded-xl font-bold transition-colors duration-300";
+
+if ($size === 'base') {
+    $classes .= " px-5 py-1 text-sm";
+}
+
+if ($size === 'small') {
+    $classes .= " px-3 py-1 text-2xs";
+}
+@endphp
+
+<a href="#" class="{{ $classes }}">{{ $slot }}</a>
+```
+
+**Detalles:**
+- **Propiedades**: Acepta un atributo `size` con valor por defecto `base`.
+- **Clases dinámicas**: Ajusta el padding y tamaño de fuente según `size` (`px-5 py-1 text-sm` para `base`, `px-3 py-1 text-2xs` para `small`).
+- **Interactividad**: Mantiene el efecto hover (`hover:bg-white/25`) y transiciones suaves.
+
+#### Componente Panel
+
+Se creó un nuevo componente `panel.blade.php` para envolver contenido con un diseño de tarjeta estilizado.
+
+**Archivo:** `resources/views/components/panel.blade.php`
+
+```blade
+@php
+$classes = 'p-4 bg-white/5 rounded-xl border border-transparent hover:border-blue-800 group transition-colors duration-300';
+@endphp
+
+<div {{ $attributes(['class' => $classes]) }}>
+    {{ $slot }}
+</div>
+```
+
+**Detalles:**
+- **Estilo dinámico**: Fondo semitransparente (`bg-white/5`), borde transparente que cambia a azul en hover (`hover:border-blue-800`).
+- **Atributos**: Usa `$attributes` para permitir clases adicionales desde el componente padre.
+- **Grupo**: La clase `group` habilita efectos hover en elementos hijos.
+
+#### Componente Employer Logo
+
+Se creó un componente `employer-logo.blade.php` para mostrar un logo de empleador con un tamaño configurable.
+
+**Archivo:** `resources/views/components/employer-logo.blade.php`
+
+```blade
+@props(['width' => 90])
+
+<img src="http://picsum.photos/seed/{{ rand(0, 100000) }}/{{ $width }}" alt="" class="rounded-xl">
+```
+
+**Detalles:**
+- **Propiedades**: Acepta un atributo `width` con valor por defecto `90`.
+- **Imagen dinámica**: Usa `picsum.photos` con una semilla aleatoria para generar imágenes placeholders.
+- **Estilo**: Aplica bordes redondeados (`rounded-xl`).
+
+#### Componente Job Card
+
+El componente `job-card.blade.php` se actualizó para usar el componente `panel` y mejorar los estilos e interactividad.
+
+**Archivo:** `resources/views/components/job-card.blade.php`
+
+```blade
+<x-panel class="flex flex-col text-center">
+    <div class="self-start text-sm">Laracasts</div>
+    <div class="py-8">
+        <h3 class="group-hover:text-blue-800 text-xl font-bold transition-colors duration-300">Video Producer</h3>
+        <p class="text-sm mt-4">Full Time - From $60,000</p>
+    </div>
+    <div class="flex justify-between items-center mt-auto">
+        <div>
+            <x-tag size="small">Backend</x-tag>
+            <x-tag size="small">Frontend</x-tag>
+            <x-tag size="small">Manager</x-tag>
+        </div>
+        <x-employer-logo :width="42" />
+    </div>
+</x-panel>
+```
+
+**Detalles:**
+- **Estructura**: Usa `<x-panel>` como contenedor con diseño vertical (`flex flex-col`).
+- **Interactividad**: El título cambia a azul en hover (`group-hover:text-blue-800`) gracias a la clase `group` del panel.
+- **Tags**: Usa `<x-tag>` con `size="small"` para etiquetas compactas.
+- **Logo**: Integra `<x-employer-logo>` con un ancho de 42px.
+
+#### Componente Job Card Wide
+
+Se creó un nuevo componente `job-card-wide.blade.php` para mostrar trabajos en un formato horizontal.
+
+**Archivo:** `resources/views/components/job-card-wide.blade.php`
+
+```blade
+<x-panel class="flex gap-x-6">
+    <div>
+        <x-employer-logo />
+    </div>
+    <div class="flex-1 flex flex-col">
+        <a href="#" class="self-start text-sm text-gray-400 transition-colors duration-300">Laracasts</a>
+        <h3 class="font-bold text-xl mt-3 group-hover:text-blue-800">Video Producer</h3>
+        <p class="text-sm text-gray-400 mt-auto">Full Time - From $60,000</p>
+    </div>
+    <div>
+        <x-tag>Tag</x-tag>
+        <x-tag>Tag</x-tag>
+        <x-tag>Tag</x-tag>
+    </div>
+</x-panel>
+```
+
+**Detalles:**
+- **Estructura**: Usa `<x-panel>` con un diseño horizontal (`flex gap-x-6`).
+- **Logo**: Incluye `<x-employer-logo>` con el ancho por defecto (90px).
+- **Contenido**: Muestra el empleador, título y salario, con el título cambiando a azul en hover.
+- **Tags**: Usa `<x-tag>` con tamaño `base` para mayor visibilidad.
+
+### Actualización de la Página Principal
+
+La vista `welcome.blade.php` se actualizó para incluir una sección de búsqueda y mostrar tanto tarjetas de trabajo estándar (`job-card`) como anchas (`job-card-wide`).
+
+**Archivo:** `resources/views/welcome.blade.php`
+
+```blade
+<x-layout>
+    <div class="space-y-10">
+        <section class="text-center pt-6">
+            <h1 class="font-bold text-4xl">Let's Find Your Next Job</h1>
+            <form action="" class="mt-6">
+                <input type="text" placeholder="Web Developer..." class="rounded-xl bg-white/5 border-white/10 px-5 py-4 w-full max-w-xl">
+            </form>
+        </section>
+        <section class="pt-10">
+            <x-section-heading>Featured Jobs</x-section-heading>
+            <div class="grid lg:grid-cols-3 gap-8 mt-6">
+                <x-job-card />
+                <x-job-card />
+                <x-job-card />
+            </div>
+        </section>
+        <section>
+            <x-section-heading>Tags</x-section-heading>
+            <div class="mt-6 space-x-1">
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+            </div>
+        </section>
+        <section>
+            <x-section-heading>Recent Jobs</x-section-heading>
+            <div class="mt-6 space-y-6">
+                <x-job-card-wide />
+                <x-job-card-wide />
+                <x-job-card-wide />
+            </div>
+        </section>
+    </div>
+</x-layout>
+```
+
+**Detalles:**
+- **Sección de búsqueda**: Agrega un título (`Let's Find Your Next Job`) y un campo de entrada estilizado con Tailwind.
+- **Featured Jobs**: Muestra tres `<x-job-card>` en un grid responsivo (`lg:grid-cols-3`).
+- **Tags**: Mantiene diez `<x-tag>` con tamaño `base`.
+- **Recent Jobs**: Muestra tres `<x-job-card-wide>` en un diseño vertical con espaciado (`space-y-6`).
+
+## Ejecutando y Probando los Cambios
+
+### Iniciar el Servidor de Desarrollo
+
+Ejecutamos el servidor Artisan y Vite:
+
+```bash
+php artisan serve
+npm run dev
+```
+
+**Salida esperada (Vite, HTTP):**
+```
+Local:    http://localhost:5173/
+Network:  http://pixel.isw811.xyz:5173/
+```
+
+### Verificación
+
+1. Accede a `http://pixel.isw811.xyz` (o `https://` si usas SSL).
+2. Verifica que la página muestra:
+   - Un logo en la navegación (asegúrate de que `resources/images/logo.svg` exista).
+   - Una barra de navegación con enlaces estáticos (`Jobs`, `Careers`, etc.).
+   - Una sección de búsqueda con un título y un campo de entrada.
+   - Tres tarjetas de trabajo (`job-card`) en la sección "Featured Jobs" con efectos hover.
+   - Diez etiquetas en la sección "Tags" con tamaño `base`.
+   - Tres tarjetas anchas (`job-card-wide`) en la sección "Recent Jobs".
+3. Confirma que los estilos de Tailwind CSS (fondo negro, texto blanco, bordes redondeados, fuente Hanken Grotesk) se aplican correctamente.
+4. Verifica los efectos hover: bordes azules en paneles y cambio de color en los títulos de las tarjetas.
+5. Modifica `resources/css/app.css` o `resources/js/app.js` y verifica que los cambios se reflejen instantáneamente (recarga en caliente).
+
+### Compilación para Producción
+
+Para generar assets optimizados:
+
+```bash
+npm run build
+```
+
+## Resultado Visual
+
+La página principal (`welcome.blade.php`) muestra un diseño moderno y responsivo:
+
+- **Navegación**: Barra superior con logo, enlaces centrados, y botón "Post a Job".
+- **Búsqueda**: Título grande y campo de entrada centrado.
+- **Featured Jobs**: Tres tarjetas verticales (`job-card`) con empleador, título, salario, etiquetas pequeñas, y logo.
+- **Tags**: Diez etiquetas con efectos hover, alineadas horizontalmente.
+- **Recent Jobs**: Tres tarjetas anchas (`job-card-wide`) con logo, información del trabajo, y etiquetas.
+- **Estilos**: Fondo negro (`bg-black`), texto blanco, fuente Hanken Grotesk, y efectos hover (bordes y títulos azules).
+
+**Captura de pantalla (simulada):**
+- **Navegación**: Logo a la izquierda, enlaces centrados, botón a la derecha.
+- **Búsqueda**: Campo de entrada con fondo semitransparente y bordes redondeados.
+- **Tarjetas de trabajo**: Grid responsivo para `job-card` y diseño horizontal para `job-card-wide`.
+- **Etiquetas**: Píldoras interactivas en dos tamaños (`base` y `small`).
+- **Responsividad**: El grid de trabajos cambia a una columna en pantallas pequeñas.
+
+
+## Conceptos Clave del Episodio
+
+- **Componentes Blade Avanzados**: Uso de propiedades (`@props`), atributos dinámicos (`$attributes`), y clases condicionales para componentes reutilizables.
+- **Tailwind CSS Personalizado**: Configuración de colores, fuentes, y tamaños de fuente personalizados en `tailwind.config.js`.
+- **Interactividad**: Implementación de efectos hover con `group` y `group-hover` para mejorar la experiencia de usuario.
+- **Diseño Responsivo**: Uso de clases como `lg:grid-cols-3` y `flex` para layouts adaptativos.
+- **Modularidad**: Separación de la interfaz en componentes (`panel`, `tag`, `employer-logo`, `job-card`, `job-card-wide`) para fácil mantenimiento.
+- **Placeholders**: Continúa el uso de datos estáticos como base para futura integración con modelos y rutas.
+
+## Beneficios de los Cambios Realizados
+
+1. **Reutilización Mejorada**: Componentes como `panel` y `employer-logo` permiten consistencia en el diseño.
+2. **Estilizado Avanzado**: Tailwind CSS con clases personalizadas y efectos hover crea una interfaz moderna.
+3. **Flexibilidad**: Los componentes `tag` y `job-card` soportan variaciones (tamaños, disposiciones).
+4. **Desarrollo Rápido**: Vite y Tailwind aceleran la iteración con recarga en caliente.
+5. **Responsividad**: El diseño se adapta a diferentes dispositivos con layouts responsivos.
+6. **Escalabilidad**: La estructura está lista para integrar datos dinámicos y funcionalidades adicionales.
 
 ---
 

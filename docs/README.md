@@ -36,6 +36,7 @@
 - [Episodio 24 - How to Preview and Send Email Using Mailable Classes](#episodio-24---how-to-preview-and-send-email-using-mailable-classes)
 - [Episodio 25 - Queues Are Easier Than You Think](#episodio-25---queues-are-easier-than-you-think)
 - [Episodio 26 - Get Your Build Process in Order](#episodio-26---get-your-build-process-in-order)
+- [Episodio 27 - From Design to Blade](#episodio-27---from-design-to-blade)
 
 
 ---
@@ -5592,6 +5593,371 @@ npm run build
 3. **Desarrollo ágil**: La recarga en caliente acelera el ciclo de desarrollo.
 4. **Seguridad mejorada**: La configuración HTTPS asegura conexiones seguras (opcional).
 5. **Integración nativa**: Vite y Laravel trabajan juntos sin problemas.
+
+# Episodio 27 - From Design to Blade
+
+## Introducción
+
+En este episodio, iniciamos un nuevo proyecto Laravel llamado **Pixel Positions**, aplicando los conocimientos adquiridos en los 26 episodios anteriores. El objetivo es transformar un diseño estático en una interfaz dinámica utilizando el motor de plantillas Blade de Laravel, Tailwind CSS y Vite. Creamos una página principal (`welcome.blade.php`) que muestra trabajos destacados, etiquetas (tags) y trabajos recientes, integrados con componentes Blade reutilizables. Este episodio se centra en la conversión de un diseño visual a código funcional, manteniendo un enfoque modular y estilizado con Tailwind CSS.
+
+## Configuración Inicial del Proyecto
+
+### Creando el Proyecto Pixel Positions
+
+Iniciamos un nuevo proyecto Laravel utilizando Composer en nuestra máquina virtual:
+
+```bash
+vagrant@webserver:~/sites$ composer create-project laravel/laravel pixel.isw811.xyz
+```
+
+**Ruta del proyecto:**
+```
+/ISW811/M/VMs/webserver/sites/pixel.isw811.xyz
+```
+
+Accedemos al directorio del proyecto:
+
+```bash
+cd /home/vagrant/sites/pixel.isw811.xyz
+```
+
+### Configuración del Entorno
+
+Actualizamos el archivo `.env` para configurar la URL de la aplicación:
+
+```env
+APP_NAME="Pixel Positions"
+APP_URL=http://pixel.isw811.xyz
+```
+
+**Nota:** Si usas HTTPS, asegúrate de configurar certificados SSL y actualizar `APP_URL` a `https://pixel.isw811.xyz`.
+
+### Instalando Dependencias Frontend
+
+Instalamos Tailwind CSS y sus dependencias para estilizar la aplicación:
+
+```bash
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init
+```
+
+**Nota:** Asegúrate de que Node.js y npm estén instalados en la máquina virtual. Si no, instálalos con:
+
+```bash
+sudo apt update
+sudo apt install nodejs npm
+```
+
+### Configurando Tailwind CSS
+
+Modificamos el archivo `tailwind.config.js` para definir los paths de las vistas Blade:
+
+**Archivo:** `tailwind.config.js`
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+    content: [
+        "./resources/**/*.blade.php",
+        "./resources/**/*.js",
+        "./resources/**/*.vue",
+    ],
+    theme: {
+        extend: {
+            colors: {
+                "black": "#060606"
+            }
+        },
+    },
+    plugins: [],
+}
+```
+
+Creamos el archivo `resources/css/app.css` para incluir las directivas de Tailwind:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+Actualizamos `resources/js/app.js` para importar los estilos y habilitar la carga de imágenes:
+
+**Archivo:** `resources/js/app.js`
+
+```javascript
+import './bootstrap';
+import '../css/app.css';
+
+import.meta.glob([
+    '../images/**'
+]);
+```
+
+### Configurando Vite
+
+Editamos `vite.config.js` para configurar el servidor de desarrollo con soporte para HTTP (o HTTPS si usas certificados):
+
+**Archivo:** `vite.config.js`
+
+```javascript
+import { defineConfig } from 'vite';
+import laravel from 'laravel-vite-plugin';
+
+export default defineConfig({
+    plugins: [
+        laravel({
+            input: ['resources/css/app.css', 'resources/js/app.js'],
+            refresh: true,
+        }),
+    ],
+    server: {
+        host: '0.0.0.0',
+        port: 5173,
+        hmr: {
+            host: 'pixel.isw811.xyz',
+            port: 5173,
+        },
+    },
+});
+```
+
+**Nota para HTTPS:** Si usas certificados SSL, agrega la configuración de `https` como en el episodio 26.
+
+## Creando el Layout Principal
+
+Creamos un componente de layout reutilizable que servirá como base para todas las páginas de la aplicación.
+
+**Archivo:** `resources/views/components/layout.blade.php`
+
+```blade
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Pixel Positions</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body class="bg-black text-white">
+    <div class="px-10">
+        <nav class="flex justify-between items-center py-4 border-b border-white/10">
+            <div>
+                <a href="/">
+                    <img src="{{ Vite::asset('resources/images/logo.svg') }}" alt="">
+                </a>
+            </div>
+            <div class="space-x-6 font-bold">
+                <a href="#">Jobs</a>
+                <a href="#">Careers</a>
+                <a href="#">Salaries</a>
+                <a href="#">Companies</a>
+            </div>
+            <div>
+                <a href="">Post a Job</a>
+            </div>
+        </nav>
+        <main class="mt-10 max-w-[986px] mx-auto">
+            {{ $slot }}
+        </main>
+    </div>
+</body>
+</html>
+```
+
+**Detalles:**
+- **Directiva `@vite`**: Incluye los assets compilados (CSS y JS).
+- **Logo dinámico**: Usa `Vite::asset()` para cargar el logo desde `resources/images/logo.svg`.
+- **Diseño responsivo**: Tailwind CSS (`px-10`, `max-w-[986px]`, `mx-auto`) asegura un diseño centrado y espaciado.
+- **Navegación estática**: Los enlaces de navegación (`Jobs`, `Careers`, etc.) son placeholders para futuras rutas.
+
+## Creando Componentes Blade Reutilizables
+
+### Componente Section Heading
+
+Creamos un componente para los encabezados de sección, que incluye un pequeño indicador visual.
+
+**Archivo:** `resources/views/components/section-heading.blade.php`
+
+```blade
+<div class="inline-flex items-center gap-x-2">
+    <span class="w-2 h-2 bg-white inline-block"></span>
+    <h3 class="font-bold text-lg">{{ $slot }}</h3>
+</div>
+```
+
+**Detalles:**
+- **Estilo visual**: Un cuadrado blanco (`w-2 h-2 bg-white`) precede al título.
+- **Slot**: Permite personalizar el texto del encabezado.
+- **Tailwind**: Usa clases como `inline-flex`, `gap-x-2`, y `font-bold` para estilizado.
+
+### Componente Tag
+
+Creamos un componente para mostrar etiquetas (tags) con efectos de hover.
+
+**Archivo:** `resources/views/components/tag.blade.php`
+
+```blade
+<a href="#" class="bg-white/10 hover:bg-white/25 px-2 py-1 rounded-xl text-xs transition-colors duration-300">{{ $slot }}</a>
+```
+
+**Detalles:**
+- **Estilo interactivo**: Fondo semitransparente (`bg-white/10`) que cambia al pasar el mouse (`hover:bg-white/25`).
+- **Transiciones**: `transition-colors duration-300` para un cambio suave.
+- **Placeholder**: El atributo `href="#"` será reemplazado por rutas dinámicas en el futuro.
+
+### Componente Job Card
+
+Creamos un componente para mostrar tarjetas de trabajos con información básica.
+
+**Archivo:** `resources/views/components/job-card.blade.php`
+
+```blade
+<div class="p-4 bg-white/5 rounded-xl flex flex-col text-center">
+    <div class="self-start text-sm">Laracasts</div>
+    <div class="py-8 font-bold">
+        <h3>Video Producer</h3>
+        <p>Full Time - From $60,000</p>
+    </div>
+    <div class="flex justify-between items-center mt-auto">
+        <div>
+            <x-tag>Tag</x-tag>
+            <x-tag>Tag</x-tag>
+            <x-tag>Tag</x-tag>
+        </div>
+        <img src="http://placehold.it/42/42" alt="" class="rounded-xl">
+    </div>
+</div>
+```
+
+**Detalles:**
+- **Estructura**: Usa `flex flex-col` para un diseño vertical.
+- **Datos estáticos**: Muestra un empleador (`Laracasts`), título (`Video Producer`), y salario (`$60,000`).
+- **Tags**: Incluye tres componentes `<x-tag>` como placeholders.
+- **Imagen placeholder**: Usa una imagen de `placehold.it` que será reemplazada por un logo real.
+- **Estilos**: Fondo semitransparente (`bg-white/5`) y bordes redondeados (`rounded-xl`).
+
+## Creando la Página Principal
+
+Modificamos la vista principal para usar los componentes creados.
+
+**Archivo:** `resources/views/welcome.blade.php`
+
+```blade
+<x-layout>
+    <div class="space-y-10">
+        <section>
+            <x-section-heading>Featured Jobs</x-section-heading>
+            <div class="grid lg:grid-cols-3 gap-8 mt-6">
+                <x-job-card />
+                <x-job-card />
+                <x-job-card />
+            </div>
+        </section>
+        <section>
+            <x-section-heading>Tags</x-section-heading>
+            <div class="mt-6 space-x-1">
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+                <x-tag>Tag</x-tag>
+            </div>
+        </section>
+        <section>
+            <x-section-heading>Recent Jobs</x-section-heading>
+        </section>
+    </div>
+</x-layout>
+```
+
+**Detalles:**
+- **Estructura en secciones**: Divide la página en tres secciones: `Featured Jobs`, `Tags`, y `Recent Jobs`.
+- **Featured Jobs**: Muestra tres `<x-job-card>` en un grid responsivo (`lg:grid-cols-3`).
+- **Tags**: Muestra diez componentes `<x-tag>` con espaciado (`space-x-1`).
+- **Recent Jobs**: Placeholder para futuros desarrollos.
+- **Espaciado**: Usa `space-y-10` para separar las secciones verticalmente.
+
+## Ejecutando y Probando los Cambios
+
+### Iniciar el Servidor de Desarrollo
+
+Ejecutamos el servidor Vite:
+
+```bash
+npm run dev
+```
+
+**Salida esperada (Vite, HTTP):**
+```
+Local:    http://localhost:5173/
+Network:  http://pixel.isw811.xyz:5173/
+```
+
+**Salida esperada (Artisan):**
+```
+Starting Laravel development server: http://127.0.0.1:8000
+```
+
+### Verificación
+
+1. Accede a `http://pixel.isw811.xyz` (o `https://` si usas SSL).
+2. Verifica que la página muestra:
+   - Un logo en la navegación (asegúrate de que `resources/images/logo.svg` exista).
+   - Una barra de navegación con enlaces estáticos (`Jobs`, `Careers`, etc.).
+   - Tres tarjetas de trabajo en la sección "Featured Jobs".
+   - Diez etiquetas en la sección "Tags".
+   - Un encabezado para "Recent Jobs" sin contenido aún.
+3. Confirma que los estilos de Tailwind CSS se aplican correctamente (fondo negro, texto blanco, bordes redondeados, etc.).
+4. Modifica `resources/css/app.css` o `resources/js/app.js` y verifica que los cambios se reflejen instantáneamente (recarga en caliente).
+
+### Compilación para Producción
+
+Para generar assets optimizados:
+
+```bash
+npm run build
+```
+
+## Resultado Visual
+
+La página principal (`welcome.blade.php`) muestra un diseño moderno y responsivo:
+
+- **Navegación**: Barra superior con logo, enlaces centrados, y un botón "Post a Job".
+- **Featured Jobs**: Tres tarjetas con información estática de trabajos, cada una con un empleador, título, salario, etiquetas, y una imagen placeholder.
+- **Tags**: Diez etiquetas con efectos de hover, alineadas horizontalmente.
+- **Recent Jobs**: Encabezado visible, listo para agregar contenido dinámico.
+- **Estilos**: Fondo negro (`bg-black`), texto blanco, y diseño centrado con Tailwind CSS.
+
+**Captura de pantalla (simulada):**
+- **Navegación**: Logo a la izquierda, enlaces centrados, botón a la derecha.
+- **Tarjetas de trabajo**: Diseño en grid con bordes redondeados y fondo semitransparente.
+- **Etiquetas**: Pequeñas píldoras con efectos de hover.
+- **Responsividad**: El grid de trabajos cambia a una columna en pantallas pequeñas.
+
+## Conceptos Clave del Episodio
+
+- **Componentes Blade**: Uso de componentes reutilizables (`layout`, `section-heading`, `job-card`, `tag`) para un código modular.
+- **Tailwind CSS**: Estilizado rápido con clases utilitarias, integrado con Vite.
+- **Vite**: Configuración para desarrollo con recarga en caliente y compilación optimizada.
+- **Diseño a Blade**: Transformación de un diseño estático en vistas dinámicas.
+- **Estructura modular**: Separación de la interfaz en secciones y componentes para fácil mantenimiento.
+- **Placeholders**: Uso de datos estáticos como base para futura integración con modelos y rutas.
+
+## Beneficios de los Cambios Realizados
+
+1. **Diseño modular**: Los componentes Blade permiten reutilización y mantenibilidad.
+2. **Estilizado eficiente**: Tailwind CSS agiliza el diseño sin escribir CSS personalizado.
+3. **Desarrollo rápido**: Vite y la recarga en caliente aceleran el ciclo de desarrollo.
+4. **Base sólida**: La estructura está lista para integrar modelos, rutas, y datos dinámicos.
+5. **Responsividad**: El diseño se adapta a diferentes tamaños de pantalla con Tailwind.
+6. **Escalabilidad**: Los componentes y la configuración permiten agregar funcionalidades fácilmente.
 
 ---
 

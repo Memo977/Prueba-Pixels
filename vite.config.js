@@ -18,13 +18,9 @@ export default defineConfig({
             interval: 100, // Intervalo de sondeo en milisegundos
             ignored: ['!**/dist/'],
         },
-        https: {
-            key: fs.readFileSync('/vagrant/ssl/30days.isw811.xyz/privkey.pem'),
-            cert: fs.readFileSync('/vagrant/ssl/30days.isw811.xyz/fullchain.pem'),
-        },
         hmr: {
-            protocol: 'wss',
-            host: '30days.isw811.xyz',
+            protocol: 'ws',
+            host: 'pixel.isw811.xyz',
             port: 5173,
         },
     },

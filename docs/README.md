@@ -38,6 +38,7 @@
 - [Episodio 26 - Get Your Build Process in Order](#episodio-26---get-your-build-process-in-order)
 - [Episodio 27 - From Design to Blade](#episodio-27---from-design-to-blade)
 - [Episodio 28 - Blade and Tailwind Techniques for Your Laravel Views](#episodio-28---blade-and-tailwind-techniques-for-your-laravel-views)
+- [Episodio 29 - Jobs, Tags, TDD, Oh My!](#episodio-29---jobs-tags-tdd-oh-my)
 
 
 ---
@@ -6331,6 +6332,367 @@ La página principal (`welcome.blade.php`) muestra un diseño moderno y responsi
 4. **Desarrollo Rápido**: Vite y Tailwind aceleran la iteración con recarga en caliente.
 5. **Responsividad**: El diseño se adapta a diferentes dispositivos con layouts responsivos.
 6. **Escalabilidad**: La estructura está lista para integrar datos dinámicos y funcionalidades adicionales.
+
+# Episodio 29 - Jobs, Tags, TDD, Oh My!
+
+## Introducción
+
+En este episodio, avanzamos en el proyecto **Pixel Positions** (ubicado en `http://pixel.isw811.xyz`), integrando datos dinámicos en las vistas creadas en los episodios 27 y 28. Configuramos la base de datos con migraciones para las tablas `jobs`, `employers`, `tags`, y `job_tag` (tabla pivote), junto con modelos, fábricas y seeders para poblar datos. Implementamos el controlador `JobController` para mostrar trabajos destacados y recientes, así como etiquetas, en la página principal (`jobs/index.blade.php`). También actualizamos los componentes Blade (`job-card.blade.php`, `job-card-wide.blade.php`, `tag.blade.php`) para manejar datos dinámicos y configuramos rutas en `web.php`. Además, introdujimos una configuración de colas para trabajos en segundo plano y deshabilitamos la carga perezosa de modelos en `AppServiceProvider`. Este episodio combina conceptos de modelado de datos, controladores, y pruebas iniciales (TDD) para una aplicación Laravel robusta.
+
+## Configuración del Proyecto
+
+El proyecto **Pixel Positions** está configurado en:
+
+```
+/ISW811/M/VMs/webserver/sites/pixel.isw811.xyz
+```
+
+**Archivo `.env`:**
+
+```env
+APP_NAME="Pixel Positions"
+APP_URL=http://pixel.isw811.xyz
+```
+
+**Nota:** Si usas HTTPS, configura certificados SSL y actualiza `APP_URL` a `https://pixel.isw811.xyz`.
+
+### Configuración de la Base de Datos
+
+Configuramos una base de datos SQLite (o el motor configurado en `.env`) y ejecutamos las migraciones:
+
+```bash
+php artisan migrate
+```
+
+Las migraciones crean las siguientes tablas:
+
+- **employers** (`2025_07_28_050512_create_employers_table.php`): Almacena empleadores con `name`, `logo`, y `user_id` (relacionado con `users`).
+- **tags** (`2025_07_28_050523_create_tags_table.php`): Almacena etiquetas con `name` único.
+- **jobs** (`2025_07_28_050617_create_jobs_table.php`): Almacena trabajos con `employer_id`, `title`, `salary`, `location`, `schedule`, `url`, y `featured`.
+- **job_tag** (`2025_07_28_050643_create_job_tag_table.php`): Tabla pivote para relacionar `jobs` y `tags`.
+- **queued_jobs**, **queued_job_batches**, **queued_failed_jobs** (`2025_07_28_050448_create_queued_jobs_table.php`): Tablas para colas de trabajos en segundo plano.
+
+### Configuración de Colas
+
+El archivo `config/queue.php` establece la conexión predeterminada para colas como `database`:
+
+```php
+'default' => env('QUEUE_CONNECTION', 'database'),
+```
+
+**Archivo `.env`:**
+
+```env
+QUEUE_CONNECTION=database
+DB_QUEUE_TABLE=queued_jobs
+```
+
+Ejecutamos el worker de colas para procesar trabajos en segundo plano:
+
+```bash
+php artisan queue:work
+```
+
+### Configuración de Modelos
+
+En `AppServiceProvider.php`, deshabilitamos la carga perezosa y la protección de asignación masiva:
+
+**Archivo:** `app/Providers/AppServiceProvider.php`
+
+```php
+public function boot(): void
+{
+    Model::preventLazyLoading();
+    Model::unguard();
+}
+```
+
+**Detalles:**
+- **preventLazyLoading**: Evita consultas N+1, lanzando errores si se intenta acceder a relaciones no cargadas.
+- **unguard**: Permite asignación masiva en modelos sin definir `$fillable`.
+
+### Modelos y Relaciones
+
+- **User** (`app/Models/User.php`): Relacionado con `Employer` mediante `hasOne`.
+- **Employer** (`app/Models/Employer.php`): Relacionado con `User` (`belongsTo`) y `Job` (`hasMany`).
+- **Job** (`app/Models/Job.php`): Relacionado con `Employer` (`belongsTo`) y `Tag` (`belongsToMany`).
+- **Tag** (`app/Models/Tag.php`): Relacionado con `Job` (`belongsToMany`) a través de la tabla pivote `job_tag`.
+
+### Fábricas y Seeders
+
+Creamos fábricas para generar datos falsos:
+
+- **EmployerFactory** (`database/factories/EmployerFactory.php`): Genera `name`, `logo`, y `user_id`.
+- **JobFactory** (`database/factories/JobFactory.php`): Genera `employer_id`, `title`, `salary`, `location`, `schedule`, `url`, y `featured`.
+- **TagFactory** (`database/factories/TagFactory.php`): Genera `name` único.
+
+Los seeders poblan la base de datos:
+
+- **DatabaseSeeder** (`database/seeders/DatabaseSeeder.php`): Crea un usuario de prueba y ejecuta `JobSeeder`.
+- **JobSeeder** (`database/seeders/JobSeeder.php`): Crea 3 etiquetas y 20 trabajos (mezcla de destacados y no destacados) con relaciones a etiquetas.
+
+Ejecutamos los seeders:
+
+```bash
+php artisan db:seed
+```
+
+## Implementación del Controlador
+
+El controlador `JobController` maneja la lógica para mostrar trabajos y etiquetas.
+
+**Archivo:** `app/Http/Controllers/JobController.php`
+
+```php
+public function index()
+{
+    $jobs = Job::all()->groupBy('featured');
+    return view('jobs.index', [
+        'featuredJobs' => $jobs[0],
+        'jobs' => $jobs[1],
+        'tags' => Tag::all(),
+    ]);
+}
+```
+
+**Detalles:**
+- **Lógica**: Recupera todos los trabajos, agrupándolos por `featured` (0 para no destacados, 1 para destacados).
+- **Vista**: Pasa `featuredJobs`, `jobs`, y `tags` a la vista `jobs/index.blade.php`.
+
+**Form Requests**:
+- `StoreJobRequest.php` y `UpdateJobRequest.php` están preparados para validaciones futuras, pero actualmente tienen `authorize()` como `false` y reglas vacías.
+
+## Actualización de Rutas
+
+Actualizamos `web.php` para enrutar la página principal al método `index` de `JobController`:
+
+**Archivo:** `routes/web.php`
+
+```php
+Route::get('/', [\App\Http\Controllers\JobController::class, 'index']);
+```
+
+## Actualización de Componentes Blade
+
+### Componente Tag
+
+El componente `tag.blade.php` se actualizó para usar datos dinámicos y enrutamiento.
+
+**Archivo:** `resources/views/components/tag.blade.php`
+
+```blade
+@props(['tag', 'size' => 'base'])
+
+@php
+$classes = "bg-white/10 hover:bg-white/25 rounded-xl font-bold transition-colors duration-300";
+
+if ($size === 'base') {
+    $classes .= " px-5 py-1 text-sm";
+}
+
+if ($size === 'small') {
+    $classes .= " px-3 py-1 text-2xs";
+}
+@endphp
+
+<a href="/tags/{{ strtolower($tag->name) }}" class="{{ $classes }}">{{ $tag->name }}</a>
+```
+
+**Detalles:**
+- **Datos dinámicos**: Usa `$tag->name` para el texto y la URL.
+- **Rutas**: Enlaza a `/tags/{nombre}` para futuras implementaciones de filtrado.
+
+### Componente Job Card
+
+El componente `job-card.blade.php` se actualizó para mostrar datos dinámicos de trabajos.
+
+**Archivo:** `resources/views/components/job-card.blade.php`
+
+```blade
+@props(['job'])
+
+<x-panel class="flex flex-col text-center">
+    <div class="self-start text-sm">{{ $job->employer->name }}</div>
+    <div class="py-8">
+        <h3 class="group-hover:text-blue-800 text-xl font-bold transition-colors duration-300">{{ $job->title }}</h3>
+        <p class="text-sm mt-4">{{ $job->salary }}</p>
+    </div>
+    <div class="flex justify-between items-center mt-auto">
+        <div>
+            @foreach($job->tags as $tag)
+            <x-tag :$tag size="small" />
+            @endforeach
+        </div>
+        <x-employer-logo :width="42" />
+    </div>
+</x-panel>
+```
+
+**Detalles:**
+- **Props**: Recibe un objeto `$job` con relaciones `employer` y `tags`.
+- **Datos dinámicos**: Muestra `employer->name`, `title`, `salary`, y recorre `tags` para mostrar etiquetas.
+
+### Componente Job Card Wide
+
+El componente `job-card-wide.blade.php` se actualizó para datos dinámicos en formato horizontal.
+
+**Archivo:** `resources/views/components/job-card-wide.blade.php`
+
+```blade
+@props(['job'])
+
+<x-panel class="flex gap-x-6">
+    <div>
+        <x-employer-logo />
+    </div>
+    <div class="flex-1 flex flex-col">
+        <a href="#" class="self-start text-sm text-gray-400 transition-colors duration-300">{{ $job->employer->name }}</a>
+        <h3 class="font-bold text-xl mt-3 group-hover:text-blue-800">{{ $job->title }}</h3>
+        <p class="text-sm text-gray-400 mt-auto">{{ $job->salary }}</p>
+    </div>
+    <div>
+        @foreach($job->tags as $tag)
+        <x-tag :$tag />
+        @endforeach
+    </div>
+</x-panel>
+```
+
+**Detalles:**
+- **Props**: Recibe un objeto `$job`.
+- **Datos dinámicos**: Muestra `employer->name`, `title`, `salary`, y recorre `tags`.
+
+### Vista Jobs Index
+
+Se creó `jobs/index.blade.php` (en lugar de `welcome.blade.php`) para mostrar trabajos y etiquetas dinámicamente.
+
+**Archivo:** `resources/views/jobs/index.blade.php`
+
+```blade
+<x-layout>
+    <div class="space-y-10">
+        <section class="text-center pt-6">
+            <h1 class="font-bold text-4xl">Let's Find Your Next Job</h1>
+            <form action="" class="mt-6">
+                <input type="text" placeholder="Web Developer..." class="rounded-xl bg-white/5 border-white/10 px-5 py-4 w-full max-w-xl">
+            </form>
+        </section>
+        <section class="pt-10">
+            <x-section-heading>Featured Jobs</x-section-heading>
+            <div class="grid lg:grid-cols-3 gap-8 mt-6">
+                @foreach($featuredJobs as $job)
+                <x-job-card :$job />
+                @endforeach
+            </div>
+        </section>
+        <section>
+            <x-section-heading>Tags</x-section-heading>
+            <div class="mt-6 space-x-1">
+                @foreach($tags as $tag)
+                <x-tag :$tag />
+                @endforeach
+            </div>
+        </section>
+        <section>
+            <x-section-heading>Recent Jobs</x-section-heading>
+            <div class="mt-6 space-y-6">
+                @foreach($jobs as $job)
+                <x-job-card-wide :$job />
+                @endforeach
+            </div>
+        </section>
+    </div>
+</x-layout>
+```
+
+**Detalles:**
+- **Datos dinámicos**: Usa `$featuredJobs`, `$jobs`, y `$tags` del controlador.
+- **Estructura**: Mantiene las secciones de búsqueda, trabajos destacados, etiquetas, y trabajos recientes.
+- **Corrección**: Nota que el archivo proporcionado tiene un error tipográfico (`@endforeac` en lugar de `@endforeach`) en la sección de trabajos destacados, que debe corregirse.
+
+## Ejecutando y Probando los Cambios
+
+### Migraciones y Seeders
+
+Ejecutamos las migraciones y seeders:
+
+```bash
+php artisan migrate --seed
+```
+
+**Resultado esperado**:
+- Tablas `users`, `employers`, `jobs`, `tags`, `job_tag`, `queued_jobs`, `queued_job_batches`, y `queued_failed_jobs` creadas.
+- 1 usuario de prueba, 3 etiquetas, y 20 trabajos (algunos destacados) con relaciones.
+
+### Iniciar el Servidor de Desarrollo
+
+Ejecutamos Artisan y Vite:
+
+```bash
+npm run dev
+```
+
+**Salida esperada (Vite, HTTP):**
+```
+Local:    http://localhost:5173/
+Network:  http://pixel.isw811.xyz:5173/
+```
+
+### Verificación
+
+1. Accede a `http://pixel.isw811.xyz` (o `https://` si usas SSL).
+2. Verifica que la página muestra:
+   - Barra de navegación con logo (`resources/images/logo.svg`), enlaces estáticos, y botón "Post a Job".
+   - Sección de búsqueda con título y campo de entrada.
+   - Sección "Featured Jobs" con tarjetas (`job-card`) mostrando trabajos destacados (`featured => true`).
+   - Sección "Tags" con etiquetas dinámicas que enlazan a `/tags/{nombre}`.
+   - Sección "Recent Jobs" con tarjetas anchas (`job-card-wide`) mostrando trabajos no destacados.
+3. Confirma que los datos son dinámicos (nombres de empleadores, títulos, salarios, etiquetas).
+4. Verifica los estilos de Tailwind CSS (fondo negro, fuente Hanken Grotesk, efectos hover).
+5. Prueba la recarga en caliente modificando `resources/css/app.css` o `resources/js/app.js`.
+
+### Compilación para Producción
+
+```bash
+npm run build
+```
+
+## Resultado Visual
+
+La página principal (`jobs/index.blade.php`) muestra un diseño dinámico y responsivo:
+
+- **Navegación**: Barra superior con logo, enlaces, y botón "Post a Job".
+- **Búsqueda**: Título grande y campo de entrada centrado.
+- **Featured Jobs**: Tarjetas verticales (`job-card`) con nombres de empleadores, títulos, salarios, etiquetas pequeñas, y logos placeholders.
+- **Tags**: Etiquetas dinámicas con efectos hover, enlazadas a rutas de filtrado.
+- **Recent Jobs**: Tarjetas anchas (`job-card-wide`) con información de trabajos y etiquetas.
+- **Estilos**: Fondo negro (`bg-black`), texto blanco, fuente Hanken Grotesk, bordes azules en hover.
+
+**Captura de pantalla (simulada):**
+- **Navegación**: Logo a la izquierda, enlaces centrados, botón a la derecha.
+- **Búsqueda**: Campo de entrada con fondo semitransparente.
+- **Tarjetas**: Grid responsivo para `job-card` y diseño horizontal para `job-card-wide`.
+- **Etiquetas**: Píldoras interactivas con nombres dinámicos.
+- **Responsividad**: Grid de trabajos cambia a columna en pantallas pequeñas.
+
+## Conceptos Clave del Episodio
+
+- **Modelos y Relaciones**: Implementación de relaciones `hasOne`, `belongsTo`, `hasMany`, y `belongsToMany` entre `User`, `Employer`, `Job`, y `Tag`.
+- **Migraciones**: Creación de tablas y tabla pivote para relaciones muchos a muchos.
+- **Fábricas y Seeders**: Generación de datos falsos para pruebas y desarrollo.
+- **Controladores**: Uso de `JobController` para manejar lógica de la página principal.
+- **Blade Dinámico**: Actualización de componentes para manejar datos dinámicos con `@props` y `@foreach`.
+- **Colas**: Configuración inicial para procesamiento en segundo plano.
+- **TDD (Test-Driven Development)**: Estructura preparada para pruebas (aunque no se implementaron en este episodio).
+
+## Beneficios de los Cambios Realizados
+
+1. **Datos Dinámicos**: La interfaz ahora muestra datos reales de la base de datos.
+2. **Modularidad**: Los componentes Blade reutilizables facilitan el mantenimiento.
+3. **Escalabilidad**: La estructura de modelos y relaciones soporta futuras funcionalidades.
+4. **Estilizado Consistente**: Tailwind CSS asegura un diseño uniforme y responsivo.
+5. **Colas**: Preparado para manejar tareas asíncronas como notificaciones o procesamiento masivo.
+6. **Base Sólida**: Migraciones, seeders, y controladores establecen una aplicación robusta.
 
 ---
 

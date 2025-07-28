@@ -39,6 +39,7 @@
 - [Episodio 27 - From Design to Blade](#episodio-27---from-design-to-blade)
 - [Episodio 28 - Blade and Tailwind Techniques for Your Laravel Views](#episodio-28---blade-and-tailwind-techniques-for-your-laravel-views)
 - [Episodio 29 - Jobs, Tags, TDD, Oh My!](#episodio-29---jobs-tags-tdd-oh-my)
+- [Episodio 30 - The Everything Episode](#episodio-30---the-everything-episode)
 
 
 ---
@@ -6693,6 +6694,759 @@ La página principal (`jobs/index.blade.php`) muestra un diseño dinámico y res
 4. **Estilizado Consistente**: Tailwind CSS asegura un diseño uniforme y responsivo.
 5. **Colas**: Preparado para manejar tareas asíncronas como notificaciones o procesamiento masivo.
 6. **Base Sólida**: Migraciones, seeders, y controladores establecen una aplicación robusta.
+
+# Episodio 30 - The Everything Episode
+
+## Introducción
+
+En este episodio, completamos el proyecto **Pixel Positions** (`http://pixel.isw811.xyz`) al integrar autenticación, creación de trabajos, búsqueda, y filtrado por etiquetas, con un enfoque en componentes Blade reutilizables y un sistema de formularios modular. Basado en el commit `ce61565` ([GitHub](https://github.com/laracasts/pixel-position/commit/ce6156528d618921d9ff67fed9b0723b4dc6c231)), actualizamos el controlador `JobController` para manejar la creación de trabajos, introdujimos `RegisteredUserController`, `SessionController`, `SearchController`, y `TagController` para autenticación y búsqueda, y eliminamos `EmployerController` y los form requests (`StoreJobRequest`, `UpdateJobRequest`). Creamos un sistema de formularios con componentes Blade (`form`, `input`, `select`, `checkbox`, `button`, `field`, `label`, `error`, `divider`) bajo el namespace `x-forms.*`, optimizamos vistas (`jobs/index.blade.php`, `jobs/create.blade.php`, `auth/register.blade.php`, `auth/login.blade.php`, `results.blade.php`), y actualizamos rutas en `web.php` con middleware `auth` y `guest`. Los modelos `Job` y `Tag` se refinaron para estandarizar etiquetas, y la navegación en `layout.blade.php` se adaptó para usuarios autenticados e invitados.
+
+## Configuración del Proyecto
+
+El proyecto está configurado en:
+
+```
+/ISW811/M/VMs/webserver/sites/pixel.isw811.xyz
+```
+
+**Archivo `.env`:**
+
+```env
+APP_NAME="Pixel Positions"
+APP_URL=http://pixel.isw811.xyz
+QUEUE_CONNECTION=database
+DB_QUEUE_TABLE=queued_jobs
+```
+
+**Nota:** Si usas HTTPS, configura certificados SSL y actualiza `APP_URL` a `https://pixel.isw811.xyz`.
+
+### Configuración de la Base de Datos
+
+Usamos la base de datos SQLite (o el motor configurado en `.env`) con las tablas del episodio 29 (`users`, `employers`, `jobs`, `tags`, `job_tag`, `queued_jobs`, `queued_job_batches`, `queued_failed_jobs`). Ejecutamos migraciones y seeders:
+
+```bash
+php artisan migrate --seed
+```
+
+**Configuración de almacenamiento** para logos:
+
+```bash
+php artisan storage:link
+```
+
+**Colas**:
+
+```bash
+php artisan queue:work
+```
+
+### Configuración Existente
+
+- **AppServiceProvider** (`app/Providers/AppServiceProvider.php`): Deshabilita carga perezosa (`Model::preventLazyLoading()`) y protección de asignación masiva (`Model::unguard()`).
+- **Tailwind CSS** (`tailwind.config.js`): Incluye color `black` (#060606), fuente Hanken Grotesk, y tamaño de fuente `2xs` (10px).
+- **Vite** (`vite.config.js`): Configurado para recarga en caliente en `http://pixel.isw811.xyz:5173`.
+
+## Cambios en los Modelos
+
+### Modelo Job
+
+**Archivo:** `app/Models/Job.php`
+
+```php
+public function tag(string $name): void
+{
+    $tag = Tag::firstOrCreate(['name' => strtolower($name)]);
+    $this->tags()->attach($tag);
+}
+
+public function tags(): BelongsToMany
+{
+    return $this->belongsToMany(Tag::class);
+}
+
+public function employer(): BelongsTo
+{
+    return $this->belongsTo(Employer::class);
+}
+```
+
+**Detalles:**
+- **tag**: Normaliza etiquetas a minúsculas (`strtolower`) para consistencia.
+- **Relaciones**: Define `belongsToMany` con `Tag` y `belongsTo` con `Employer`.
+
+### Modelo Tag
+
+**Archivo:** `app/Models/Tag.php`
+
+```php
+public function jobs(): BelongsToMany
+{
+    return $this->belongsToMany(Job::class);
+}
+```
+
+**Detalles:**
+- **Relación**: Agrega `belongsToMany` con `Job` para facilitar consultas de trabajos por etiqueta.
+
+**Modelos sin cambios** (de episodio 29):
+- `User.php`: Relación `hasOne` con `Employer`.
+- `Employer.php`: Relaciones `belongsTo` con `User`, `hasMany` con `Job`.
+
+## Cambios en los Controladores
+
+### JobController
+
+**Archivo:** `app/Http/Controllers/JobController.php`
+
+```php
+public function index()
+{
+    $jobs = Job::latest()->with(['employer', 'tags'])->get()->groupBy('featured');
+    return view('jobs.index', [
+        'jobs' => $jobs[0],
+        'featuredJobs' => $jobs[1],
+        'tags' => Tag::all(),
+    ]);
+}
+
+public function create()
+{
+    return view('jobs.create');
+}
+
+public function store(Request $request)
+{
+    $attributes = $request->validate([
+        'title' => ['required'],
+        'salary' => ['required'],
+        'location' => ['required'],
+        'schedule' => ['required', Rule::in(['Part Time', 'Full Time'])],
+        'url' => ['required', 'active_url'],
+        'tags' => ['nullable'],
+    ]);
+
+    $attributes['featured'] = $request->has('featured');
+    $job = Auth::user()->employer->jobs()->create(Arr::except($attributes, 'tags'));
+
+    if ($attributes['tags'] ?? false) {
+        foreach (explode(',', $attributes['tags']) as $tag) {
+            $job->tag($tag);
+        }
+    }
+
+    return redirect('/');
+}
+```
+
+**Detalles:**
+- **index**: Ordena trabajos por fecha (`latest`), carga relaciones para evitar N+1, agrupa por `featured`.
+- **create**: Muestra formulario de creación.
+- **store**: Valida datos, crea trabajo asociado al empleador autenticado, agrega etiquetas.
+
+### RegisteredUserController
+
+**Archivo:** `app/Http/Controllers/RegisteredUserController.php`
+
+```php
+public function create()
+{
+    return view('auth.register');
+}
+
+public function store(Request $request)
+{
+    $userAttributes = $request->validate([
+        'name' => ['required'],
+        'email' => ['required', 'email', 'unique:users,email'],
+        'password' => ['required', 'confirmed', Password::min(6)],
+    ]);
+
+    $employerAttributes = $request->validate([
+        'employer' => ['required'],
+        'logo' => ['required', File::types(['png', 'jpg', 'webp'])],
+    ]);
+
+    $user = User::create($userAttributes);
+    $logoPath = $request->logo->store('logos');
+    $user->employer()->create([
+        'name' => $employerAttributes['employer'],
+        'logo' => $logoPath,
+    ]);
+
+    Auth::login($user);
+    return redirect('/');
+}
+```
+
+**Detalles:**
+- **create**: Muestra formulario de registro.
+- **store**: Valida usuario y empleador, almacena logo, crea relaciones, inicia sesión.
+
+### SessionController
+
+**Archivo:** `app/Http/Controllers/SessionController.php`
+
+```php
+public function create()
+{
+    return view('auth.login');
+}
+
+public function store()
+{
+    $attributes = request()->validate([
+        'email' => ['required', 'email'],
+        'password' => ['required'],
+    ]);
+
+    if (! Auth::attempt($attributes)) {
+        throw ValidationException::withMessages([
+            'email' => 'Sorry, those credentials do not match.',
+        ]);
+    }
+
+    request()->session()->regenerate();
+    return redirect('/');
+}
+
+public function destroy()
+{
+    Auth::logout();
+    return redirect('/');
+}
+```
+
+**Detalles:**
+- **create**: Muestra formulario de login.
+- **store**: Valida credenciales, inicia sesión, regenera sesión.
+- **destroy**: Cierra sesión.
+
+### SearchController
+
+**Archivo:** `app/Http/Controllers/SearchController.php`
+
+```php
+public function __invoke()
+{
+    $jobs = Job::query()
+        ->with(['employer', 'tags'])
+        ->where('title', 'LIKE', '%'.request('q').'%')
+        ->get();
+    return view('results', ['jobs' => $jobs]);
+}
+```
+
+**Detalles:**
+- **__invoke**: Filtra trabajos por título usando el parámetro `q`.
+
+### TagController
+
+**Archivo:** `app/Http/Controllers/TagController.php`
+
+```php
+public function __invoke(Tag $tag)
+{
+    return view('results', ['jobs' => $tag->jobs->load(['employer', 'tags'])]);
+}
+```
+
+**Detalles:**
+- **__invoke**: Muestra trabajos asociados a una etiqueta.
+
+**Eliminaciones** (de episodio 29):
+- `EmployerController.php`, `StoreJobRequest.php`, `UpdateJobRequest.php`: Lógica trasladada a `JobController` y `RegisteredUserController`.
+
+## Actualización de Rutas
+
+**Archivo:** `routes/web.php`
+
+```php
+use App\Http\Controllers\JobController;
+use App\Http\Controllers\RegisteredUserController;
+use App\Http\Controllers\SearchController;
+use App\Http\Controllers\SessionController;
+use App\Http\Controllers\TagController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', [JobController::class, 'index']);
+Route::get('/jobs/create', [JobController::class, 'create'])->middleware('auth');
+Route::post('/jobs', [JobController::class, 'store'])->middleware('auth');
+Route::get('/search', SearchController::class);
+Route::get('/tags/{tag:name}', TagController::class);
+Route::middleware('guest')->group(function () {
+    Route::get('/register', [RegisteredUserController::class, 'create']);
+    Route::post('/register', [RegisteredUserController::class, 'store']);
+    Route::get('/login', [SessionController::class, 'create']);
+    Route::post('/login', [SessionController::class, 'store']);
+});
+Route::delete('/logout', [SessionController::class, 'destroy'])->middleware('auth');
+```
+
+**Detalles:**
+- **Rutas**: Cubren listado, creación de trabajos, búsqueda, filtrado por etiquetas, registro, login, logout.
+- **Middleware**: `auth` protege rutas de creación; `guest` restringe registro/login a usuarios no autenticados.
+- **Cambio**: Logout usa método DELETE en lugar de POST.
+
+## Nuevos y Actualizados Componentes Blade
+
+### Form Components (namespace `x-forms.*`)
+
+**Archivo:** `resources/views/components/forms/form.blade.php`
+
+```blade
+<form {{ $attributes(["class" => "max-w-2xl mx-auto space-y-6", "method" => "GET"]) }}>
+    @if ($attributes->get('method', 'GET') !== 'GET')
+        @csrf
+        @method($attributes->get('method'))
+    @endif
+    {{ $slot }}
+</form>
+```
+
+**Archivo:** `resources/views/components/forms/input.blade.php`
+
+```blade
+@props(['label', 'name'])
+@php
+    $defaults = [
+        'type' => 'text',
+        'id' => $name,
+        'name' => $name,
+        'class' => 'rounded-xl bg-white/10 border border-white/10 px-5 py-4 w-full',
+        'value' => old($name)
+    ];
+@endphp
+<x-forms.field :$label :$name>
+    <input {{ $attributes($defaults) }}>
+</x-forms.field>
+```
+
+**Archivo:** `resources/views/components/forms/select.blade.php`
+
+```blade
+@props(['label', 'name'])
+@php
+    $defaults = [
+        'id' => $name,
+        'name' => $name,
+        'class' => 'rounded-xl bg-white/10 border border-white/10 px-5 py-4 w-full'
+    ];
+@endphp
+<x-forms.field :$label :$name>
+    <select {{ $attributes($defaults) }}>
+        {{ $slot }}
+    </select>
+</x-forms.field>
+```
+
+**Archivo:** `resources/views/components/forms/checkbox.blade.php`
+
+```blade
+@props(['label', 'name'])
+@php
+    $defaults = [
+        'type' => 'checkbox',
+        'id' => $name,
+        'name' => $name,
+        'value' => old($name)
+    ];
+@endphp
+<x-forms.field :$label :$name>
+    <div class="rounded-xl bg-white/10 border border-white/10 px-5 py-4 w-full">
+        <input {{ $attributes($defaults) }}>
+        <span class="pl-1">{{ $label }}</span>
+    </div>
+</x-forms.field>
+```
+
+**Archivo:** `resources/views/components/forms/button.blade.php`
+
+```blade
+<button {{ $attributes(['class' => 'bg-blue-800 rounded py-2 px-6 font-bold']) }}>{{ $slot }}</button>
+```
+
+**Archivo:** `resources/views/components/forms/field.blade.php`
+
+```blade
+@props(['label', 'name'])
+<div>
+    <x-forms.label :$label :$name />
+    {{ $slot }}
+    <x-forms.error :$name />
+</div>
+```
+
+**Archivo:** `resources/views/components/forms/label.blade.php`
+
+```blade
+@props(['name', 'label'])
+<div class="inline-flex items-center gap-x-2">
+    <span class="w-2 h-2 bg-white inline-block"></span>
+    <label class="font-bold" for="{{ $name }}">{{ $label }}</label>
+</div>
+```
+
+**Archivo:** `resources/views/components/forms/error.blade.php`
+
+```blade
+@props(['name'])
+@error($name)
+<div class="text-red-500 text-sm mt-2">{{ $message }}</div>
+@enderror
+```
+
+**Archivo:** `resources/views/components/forms/divider.blade.php`
+
+```blade
+<hr class="border-white/10">
+```
+
+**Detalles:**
+- **Namespace**: Componentes bajo `x-forms.*` para formularios modulares.
+- **Funcionalidad**: Soporte para inputs, selects, checkboxes, botones, etiquetas, errores, y divisores.
+- **Estilo**: Clases Tailwind consistentes (`bg-white/10`, `border-white/10`, `rounded-xl`).
+
+### Otros Componentes
+
+**Archivo:** `resources/views/components/page-heading.blade.php`
+
+```blade
+<h1 class="font-bold text-center text-4xl mb-8">{{ $slot }}</h1>
+```
+
+**Archivo:** `resources/views/components/section-heading.blade.php`
+
+```blade
+<div class="inline-flex items-center gap-x-2">
+    <span class="w-2 h-2 bg-white inline-block"></span>
+    <h3 class="font-bold text-lg">{{ $slot }}</h3>
+</div>
+```
+
+**Archivo:** `resources/views/components/panel.blade.php`
+
+```blade
+@php
+    $classes = 'p-4 bg-white/5 rounded-xl border border-transparent hover:border-blue-800 group transition-colors duration-300';
+@endphp
+<div {{ $attributes(['class' => $classes]) }}>
+    {{ $slot }}
+</div>
+```
+
+**Archivo:** `resources/views/components/tag.blade.php`
+
+```blade
+@props(['tag', 'size' => 'base'])
+@php
+    $classes = "bg-white/10 hover:bg-white/25 rounded-xl font-bold transition-colors duration-300";
+    if ($size === 'base') {
+        $classes .= " px-5 py-1 text-sm";
+    }
+    if ($size === 'small') {
+        $classes .= " px-3 py-1 text-2xs";
+    }
+@endphp
+<a href="/tags/{{ strtolower($tag->name) }}" class="{{ $classes }}">{{ ucwords($tag->name) }}</a>
+```
+
+**Archivo:** `resources/views/components/employer-logo.blade.php`
+
+```blade
+@props(['employer', 'width' => 90])
+<img src="{{ '/storage/' . $employer->logo }}" alt="{{ $employer->name }}" class="rounded-xl" style="width: {{ $width }}px">
+```
+
+**Detalles:**
+- **page-heading**: Títulos grandes para páginas.
+- **section-heading**: Encabezados de sección con indicador visual.
+- **panel**: Contenedor estilizado con efectos hover.
+- **tag**: Muestra etiquetas dinámicas con capitalización (`ucwords`).
+- **employer-logo**: Usa logo almacenado en `storage/logos`.
+
+### Vistas
+
+**Archivo:** `resources/views/jobs/index.blade.php`
+
+```blade
+<x-layout>
+    <x-page-heading>Let's Find Your Next Job</x-page-heading>
+    <x-forms.form action="/search">
+        <x-forms.input name="q" placeholder="Web Developer..." />
+    </x-forms.form>
+    <section class="pt-10">
+        <x-section-heading>Featured Jobs</x-section-heading>
+        <div class="grid lg:grid-cols-3 gap-8 mt-6">
+            @foreach($featuredJobs as $job)
+                <x-job-card :$job />
+            @endforeach
+        </div>
+    </section>
+    <section>
+        <x-section-heading>Tags</x-section-heading>
+        <div class="mt-6 space-x-1">
+            @foreach($tags as $tag)
+                <x-tag :$tag />
+            @endforeach
+        </div>
+    </section>
+    <section>
+        <x-section-heading>Recent Jobs</x-section-heading>
+        <div class="mt-6 space-y-6">
+            @foreach($jobs as $job)
+                <x-job-card-wide :$job />
+            @endforeach
+        </div>
+    </section>
+</x-layout>
+```
+
+**Archivo:** `resources/views/jobs/create.blade.php`
+
+```blade
+<x-layout>
+    <x-page-heading>New Job</x-page-heading>
+    <x-forms.form method="POST" action="/jobs">
+        <x-forms.input label="Title" name="title" />
+        <x-forms.input label="Salary" name="salary" />
+        <x-forms.input label="Location" name="location" />
+        <x-forms.select label="Schedule" name="schedule">
+            <option value="Part Time">Part Time</option>
+            <option value="Full Time">Full Time</option>
+        </x-forms.select>
+        <x-forms.input label="URL" name="url" />
+        <x-forms.input label="Tags (comma-separated)" name="tags" />
+        <x-forms.checkbox label="Featured?" name="featured" />
+        <x-forms.button>Create Job</x-forms.button>
+    </x-forms.form>
+</x-layout>
+```
+
+**Archivo:** `resources/views/auth/register.blade.php`
+
+```blade
+<x-layout>
+    <x-page-heading>Register</x-page-heading>
+    <x-forms.form method="POST" action="/register" enctype="multipart/form-data">
+        <x-forms.input label="Name" name="name" />
+        <x-forms.input label="Email" name="email" type="email" />
+        <x-forms.input label="Password" name="password" type="password" />
+        <x-forms.input label="Password Confirmation" name="password_confirmation" type="password" />
+        <x-forms.divider />
+        <x-forms.input label="Employer Name" name="employer" />
+        <x-forms.input label="Employer Logo" name="logo" type="file" />
+        <x-forms.button>Create Account</x-forms.button>
+    </x-forms.form>
+</x-layout>
+```
+
+**Archivo:** `resources/views/auth/login.blade.php`
+
+```blade
+<x-layout>
+    <x-page-heading>Log In</x-page-heading>
+    <x-forms.form method="POST" action="/login">
+        <x-forms.input label="Email" name="email" type="email" />
+        <x-forms.input label="Password" name="password" type="password" />
+        <x-forms.button>Log In</x-forms.button>
+    </x-forms.form>
+</x-layout>
+```
+
+**Archivo:** `resources/views/results.blade.php`
+
+```blade
+<x-layout>
+    <x-page-heading>Results</x-page-heading>
+    <div class="space-y-6">
+        @foreach($jobs as $job)
+            <x-job-card-wide :$job />
+        @endforeach
+    </div>
+</x-layout>
+```
+
+**Archivo:** `resources/views/components/job-card.blade.php`
+
+```blade
+@props(['job'])
+<x-panel class="flex flex-col text-center">
+    <div class="self-start text-sm">{{ $job->employer->name }}</div>
+    <div class="py-8">
+        <h3 class="group-hover:text-blue-800 text-xl font-bold transition-colors duration-300">
+            <a href="{{ $job->url }}" target="_blank">{{ $job->title }}</a>
+        </h3>
+        <p class="text-sm mt-4">{{ $job->salary }}</p>
+    </div>
+    <div class="flex justify-between items-center mt-auto">
+        <div>
+            @foreach($job->tags as $tag)
+                <x-tag :$tag size="small" />
+            @endforeach
+        </div>
+        <x-employer-logo :employer="$job->employer" :width="42" />
+    </div>
+</x-panel>
+```
+
+**Archivo:** `resources/views/components/job-card-wide.blade.php`
+
+```blade
+@props(['job'])
+<x-panel class="flex gap-x-6">
+    <div>
+        <x-employer-logo :employer="$job->employer" />
+    </div>
+    <div class="flex-1 flex flex-col">
+        <a href="#" class="self-start text-sm text-gray-400 transition-colors duration-300">{{ $job->employer->name }}</a>
+        <h3 class="font-bold text-xl mt-3 group-hover:text-blue-800">
+            <a href="{{ $job->url }}" target="_blank">{{ $job->title }}</a>
+        </h3>
+        <p class="text-sm text-gray-400 mt-auto">{{ $job->salary }}</p>
+    </div>
+    <div>
+        @foreach($job->tags as $tag)
+            <x-tag :$tag />
+        @endforeach
+    </div>
+</x-panel>
+```
+
+**Archivo:** `resources/views/components/layout.blade.php`
+
+```blade
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Pixel Positions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body class="bg-black text-white font-hanken-grotesk pb-20">
+    <div class="px-10">
+        <nav class="flex justify-between items-center py-4 border-b border-white/10">
+            <div>
+                <a href="/">
+                    <img src="{{ Vite::asset('resources/images/logo.svg') }}" alt="">
+                </a>
+            </div>
+            <div class="space-x-6 font-bold">
+                <a href="/">Jobs</a>
+                <a href="#">Careers</a>
+                <a href="#">Salaries</a>
+                <a href="#">Companies</a>
+            </div>
+            @auth
+                <div class="space-x-6 font-bold flex">
+                    <a href="/jobs/create">Post a Job</a>
+                    <form method="POST" action="/logout">
+                        @csrf
+                        @method('DELETE')
+                        <button>Log Out</button>
+                    </form>
+                </div>
+            @endauth
+            @guest
+                <div class="space-x-6 font-bold">
+                    <a href="/register">Sign Up</a>
+                    <a href="/login">Log In</a>
+                </div>
+            @endguest
+        </nav>
+        <main class="mt-10 max-w-[986px] mx-auto">
+            {{ $slot }}
+        </main>
+    </div>
+</body>
+</html>
+```
+
+**Detalles:**
+- **layout**: Agrega padding inferior (`pb-20`), usa `@auth`/`@guest` para navegación condicional, y logout con método DELETE.
+- **index**: Usa `page-heading` y `x-forms.*` para búsqueda, muestra trabajos destacados y recientes.
+- **create**: Formulario modular para crear trabajos con `select` y `checkbox`.
+- **register/login**: Formularios estilizados con componentes `x-forms.*`.
+- **results**: Muestra resultados de búsqueda/filtrado con `job-card-wide`.
+- **job-card/job-card-wide**: Agrega enlaces a URLs de trabajos (`target="_blank"`).
+
+## Ejecutando y Probando los Cambios
+
+### Preparación
+
+```bash
+php artisan migrate --seed
+php artisan storage:link
+php artisan queue:work
+php artisan serve
+npm run dev
+```
+
+**Salida esperada (Vite, HTTP):**
+```
+Local:    http://localhost:5173/
+Network:  http://pixel.isw811.xyz:5173/
+```
+
+### Verificación
+
+1. **Navegación** (`http://pixel.isw811.xyz`):
+   - Invitados: Ven "Sign Up" y "Log In".
+   - Autenticados: Ven "Post a Job" y "Log Out".
+2. **Registro** (`/register`):
+   - Completa nombre, email, contraseña, nombre de empleador, logo.
+   - Verifica redirección a `/` y logo en `storage/app/logos`.
+3. **Login** (`/login`):
+   - Usa credenciales de seeder (e.g., `test@example.com`).
+   - Confirma redirección o error para credenciales inválidas.
+4. **Creación de trabajos** (`/jobs/create`):
+   - Requiere autenticación.
+   - Crea trabajo con título, salario, ubicación, horario, URL, etiquetas, destacado.
+   - Verifica aparición en `/` (destacado o reciente).
+5. **Búsqueda** (`/search?q=developer`):
+   - Busca término y verifica resultados en `results.blade.php`.
+6. **Filtrado por etiqueta** (`/tags/backend`):
+   - Clica etiqueta y verifica trabajos filtrados.
+7. **Estilos**: Fondo negro, fuente Hanken Grotesk, efectos hover, formularios con validación visual.
+
+### Compilación para Producción
+
+```bash
+npm run build
+```
+
+## Resultado Visual
+
+- **Navegación**: Logo, enlaces, opciones condicionales.
+- **Búsqueda**: Formulario funcional con `x-forms.input`.
+- **Trabajos**: Tarjetas dinámicas (`job-card`, `job-card-wide`) con enlaces a URLs.
+- **Formularios**: Registro, login, creación con componentes modulares.
+- **Resultados**: Lista de trabajos filtrados con diseño horizontal.
+- **Estilos**: Consistencia con Tailwind CSS (bordes redondeados, hover azul).
+
+![Página principal de Pixel Positions](./images/37.PNG "Página principal de Pixel Positions")
+
+## Conceptos Clave del Episodio
+
+- **Autenticación**: Registro, login, logout con middleware `auth`/`guest`.
+- **Formularios Modulares**: Sistema `x-forms.*` para inputs, selects, checkboxes, etc.
+- **Creación de Trabajos**: Validación y asociación con empleadores autenticados.
+- **Búsqueda y Filtrado**: Búsqueda por título y filtrado por etiquetas.
+- **Blade Dinámico**: Componentes reutilizables con datos dinámicos.
+- **Almacenamiento**: Logos en `storage/logos`.
+- **Rutas Protegidas**: Uso de middleware para control de acceso.
+
+## Beneficios de los Cambios Realizados
+
+1. **Aplicación Completa**: Registro, login, creación de trabajos, búsqueda, y filtrado.
+2. **Formularios Reutilizables**: Componentes `x-forms.*` simplifican desarrollo.
+3. **Interfaz Consistente**: Tailwind CSS y Hanken Grotesk para diseño moderno.
+4. **Seguridad**: Validaciones robustas y regeneración de sesiones.
+5. **Escalabilidad**: Estructura lista para edición/eliminación de trabajos.
 
 ---
 
